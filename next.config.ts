@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    // Lot photos come from whichever host the backend serves media from. See NOTES.md.
+    unoptimized: true,
+  },
 };
 
 export default nextConfig;
