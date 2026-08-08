@@ -53,3 +53,17 @@ export function hasSequenceGap(lotId: string, sequence: number): boolean {
   const last = useRealtimeStore.getState().lastSequence[lotId] ?? 0;
   return last > 0 && sequence > last + 1;
 }
+
+/**
+ * True for an event we have already applied.
+ *
+ * `subscribe` takes one `after_sequence` for the whole batch, so a reconnect
+ * that resumes several lots at once has to pick a single resume point. We pick
+ * the lowest — replaying a few events we already have is recoverable, whereas
+ * skipping one leaves a permanent hole — and drop the duplicates here. Without
+ * this, a replayed old bid would overwrite the current price with a stale one.
+ */
+export function isStaleSequence(lotId: string, sequence: number): boolean {
+  const last = useRealtimeStore.getState().lastSequence[lotId] ?? 0;
+  return sequence <= last;
+}

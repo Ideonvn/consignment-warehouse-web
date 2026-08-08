@@ -8,6 +8,7 @@ import { queryKeys } from "@/lib/api/queryKeys";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
+import { lotOutcome } from "@/lib/format/lotStatus";
 import type { MyBid } from "@/types/api";
 import { BidSheet, type BidTarget } from "@/components/bid/BidSheet";
 import { Button } from "@/components/ui/Button";
@@ -51,7 +52,11 @@ export function BiddingList() {
   const now = useNow();
 
   // The 200-lot cap is far above any realistic "my bids" list.
-  useLotSubscription((data ?? []).filter((row) => row.is_open).map((row) => row.lot_id));
+  // `MyBid` carries no `bid_sequence`, so these subscribe without a resume
+  // point; the lot and stack screens supply one when they have it.
+  useLotSubscription(
+    (data ?? []).filter((row) => row.is_open).map((row) => ({ id: row.lot_id })),
+  );
 
   const currencyFor = (auctionId: string) =>
     auctions?.find((auction) => auction.id === auctionId)?.currency_code ?? "ZAR";
@@ -138,6 +143,12 @@ export function BiddingList() {
   );
 }
 
+const OUTCOME_TEXT: Record<string, string> = {
+  success: "text-success",
+  danger: "text-danger",
+  muted: "text-text-muted",
+};
+
 function BidRow({
   row,
   currency,
@@ -147,6 +158,15 @@ function BidRow({
   currency: string;
   onRaise: () => void;
 }) {
+  // `is_open` is already clock-corrected by the caller.
+  const outcome = row.is_open
+    ? null
+    : lotOutcome(row.status, {
+        clockExpired: true,
+        amILeading: row.am_i_leading,
+        hasBids: row.my_highest_bid_minor !== null,
+      });
+
   return (
     <article className="overflow-hidden rounded-2xl border border-border bg-surface">
       <Link href={`/lots/${row.lot_id}`} className="flex gap-3 p-3">
@@ -160,12 +180,12 @@ function BidRow({
             <span
               className={cn(
                 "shrink-0 text-xs font-semibold",
-                !row.is_open ? "text-text-muted"
+                outcome ? OUTCOME_TEXT[outcome.tone]
                 : row.am_i_leading ? "text-success"
                 : "text-danger",
               )}
             >
-              {!row.is_open ? (row.am_i_leading ? "Won" : "Ended") : row.am_i_leading ? "Winning" : "Outbid"}
+              {outcome ? outcome.label : row.am_i_leading ? "Winning" : "Outbid"}
             </span>
           </div>
 

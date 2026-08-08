@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { usePricePulse } from "@/lib/realtime/store";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
+import { lotOutcome } from "@/lib/format/lotStatus";
 import type { LotCard } from "@/types/api";
 import { cn } from "@/lib/utils/cn";
 
@@ -27,8 +28,11 @@ export function LotCardFace({
   // screen notices the price moved under them.
   const pulse = usePricePulse(lot.id);
   const now = useNow();
-  const closed =
-    lot.status !== "scheduled" && !isLotOpen(lot.status, lot.effective_ends_at, now);
+  const open = isLotOpen(lot.status, lot.effective_ends_at, now);
+  const outcome = lotOutcome(lot.status, {
+    clockExpired: !open,
+    hasBids: lot.bid_count > 0,
+  });
 
   return (
     <div
@@ -43,8 +47,8 @@ export function LotCardFace({
 
         <div className="absolute top-3 right-3 left-3 flex items-start justify-between gap-2">
           <StatusPill>Lot {lot.lot_number}</StatusPill>
-          {closed ? (
-            <StatusPill tone="danger">Closed</StatusPill>
+          {outcome ? (
+            <StatusPill tone={outcome.tone}>{outcome.label}</StatusPill>
           ) : (
             <StatusPill tone={hasBids ? "live" : "muted"} pulse={hasBids}>
               <Countdown endsAt={lot.effective_ends_at} />

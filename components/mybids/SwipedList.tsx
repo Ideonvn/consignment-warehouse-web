@@ -7,6 +7,7 @@ import { deleteSwipe } from "@/lib/api/endpoints";
 import { useSwipedLots } from "@/lib/hooks/useSwipedLots";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
+import { lotOutcome } from "@/lib/format/lotStatus";
 import type { SwipeDirection } from "@/types/api";
 import { BidSheet } from "@/components/bid/BidSheet";
 import { Button } from "@/components/ui/Button";
@@ -102,7 +103,10 @@ export function SwipedList({ direction }: { direction: SwipeDirection }) {
                     {open ? (
                       <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
                     ) : (
-                      "Closed"
+                      (lotOutcome(lot.status, {
+                        clockExpired: true,
+                        hasBids: lot.bid_count > 0,
+                      })?.label ?? "Closed")
                     )}
                   </p>
                 </div>

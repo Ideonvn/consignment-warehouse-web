@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { getLot } from "@/lib/api/endpoints";
 import { patchLot, patchMyBid } from "@/lib/api/cache";
 import { queryKeys } from "@/lib/api/queryKeys";
-import { hasSequenceGap, useRealtimeStore } from "@/lib/realtime/store";
+import { hasSequenceGap, isStaleSequence, useRealtimeStore } from "@/lib/realtime/store";
 import { realtime } from "@/lib/realtime/socket";
 import type { LotDetail, ServerMessage } from "@/types/api";
 
@@ -25,6 +25,10 @@ export function applyServerMessage(
 
   switch (message.type) {
     case "bid": {
+      // Already applied — a replay from a batched `after_sequence`. Dropping it
+      // keeps an old amount from overwriting the current price.
+      if (isStaleSequence(message.lot_id, message.sequence)) return;
+
       // A jump of more than one means we missed events: ask for the replay.
       if (hasSequenceGap(message.lot_id, message.sequence)) {
         realtime.resync(message.lot_id);
@@ -42,10 +46,10 @@ export function applyServerMessage(
       patchMyBid(queryClient, message.lot_id, { current_bid_minor: message.amount_minor });
       void queryClient.invalidateQueries({ queryKey: queryKeys.bids(message.lot_id) });
 
-      // Only the server knows whether this displaced the user — their rival's
-      // maximum is invisible to us — so ask, but only if they're involved.
-      const involved = cached?.am_i_leading || cached?.my_auto_bid_max_minor !== null;
-      if (cached && involved) {
+      // The bid event carries no `minimum_next_bid_minor`, and only the server
+      // knows whether this displaced the user — a rival's maximum is invisible
+      // to us. So refetch the lot whenever anyone has it loaded.
+      if (cached) {
         void queryClient
           .fetchQuery({
             queryKey: queryKeys.lot(message.lot_id),
@@ -59,7 +63,10 @@ export function applyServerMessage(
             if (cached.am_i_leading && !fresh.am_i_leading) effects.onOutbid(fresh);
           })
           .catch(() => undefined);
-        void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
+
+        if (cached.am_i_leading || cached.my_auto_bid_max_minor !== null) {
+          void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
+        }
       }
       return;
     }
@@ -115,6 +122,9 @@ export function applyServerMessage(
         bid_sequence: message.latest_sequence,
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.bids(message.lot_id) });
+      // Like `bid`, this payload has no `minimum_next_bid_minor`; anything
+      // actively displaying the lot needs the real figure.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lot(message.lot_id) });
       return;
     }
 

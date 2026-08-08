@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/api/queryKeys";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
+import { lotOutcome } from "@/lib/format/lotStatus";
 import { BidHistory } from "@/components/lot/BidHistory";
 import { LotGallery } from "@/components/lot/LotGallery";
 import { BidSheet } from "@/components/bid/BidSheet";
@@ -45,7 +46,7 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
 
   const currency = auction?.currency_code ?? "ZAR";
 
-  useLotSubscription([lotId]);
+  useLotSubscription([{ id: lotId, sequence: lot?.bid_sequence }]);
   const pulse = usePricePulse(lotId);
   const now = useNow();
 
@@ -75,6 +76,15 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
 
   const hasBids = lot.bid_count > 0 && lot.current_bid_minor !== null;
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
+  // A lot that hasn't opened yet is not a closed lot, and must never read as one.
+  const notYetOpen = lot.status === "scheduled";
+  const outcome = notYetOpen
+    ? null
+    : lotOutcome(lot.status, {
+        clockExpired: !open,
+        amILeading: lot.am_i_leading,
+        hasBids: lot.bid_count > 0,
+      });
 
   return (
     <div className="flex flex-1 flex-col">
@@ -99,11 +109,17 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
             <StatusPill tone="live" pulse>
               <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
             </StatusPill>
+          ) : notYetOpen ? (
+            <StatusPill>
+              {auction ? (
+                <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
+              ) : (
+                "Opens soon"
+              )}
+            </StatusPill>
           ) : (
-            <StatusPill tone="danger">
-              {lot.status === "ended_sold" ? "Sold"
-                : lot.status === "live" ? "Bidding closed"
-                : "Closed"}
+            <StatusPill tone={outcome?.tone ?? "muted"}>
+              {outcome?.label ?? "Closed"}
             </StatusPill>
           )}
         </div>
@@ -142,7 +158,22 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
             ) : null}
           </div>
 
-          {lot.am_i_leading ? (
+          {notYetOpen ? (
+            <p className="mt-3 rounded-xl bg-surface-raised px-3 py-2 text-sm font-medium text-text-muted">
+              Bidding hasn&apos;t opened on this lot yet.
+            </p>
+          ) : !open && outcome ? (
+            <p
+              className={cn(
+                "mt-3 rounded-xl px-3 py-2 text-sm font-medium",
+                outcome.tone === "success" ? "bg-success/10 text-success"
+                : outcome.tone === "danger" ? "bg-danger/10 text-danger"
+                : "bg-surface-raised text-text-muted",
+              )}
+            >
+              {outcome.detail}
+            </p>
+          ) : lot.am_i_leading ? (
             <p className="mt-3 rounded-xl bg-success/10 px-3 py-2 text-sm font-medium text-success">
               You&apos;re winning this lot.
             </p>
@@ -162,14 +193,18 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
                   className="font-semibold text-text"
                 />
               </p>
-              <div className="mt-3 flex gap-2">
-                <Button onClick={() => setBidOpen(true)} disabled={!open} className="flex-1">
-                  Raise maximum
-                </Button>
-                <Button variant="danger" onClick={() => setCancelOpen(true)} className="flex-1">
-                  Stop auto-bidding
-                </Button>
-              </div>
+              {/* Once the lot is closed neither control can do anything, and
+                  offering them on a lot someone just won reads as a mistake. */}
+              {open ? (
+                <div className="mt-3 flex gap-2">
+                  <Button onClick={() => setBidOpen(true)} className="flex-1">
+                    Raise maximum
+                  </Button>
+                  <Button variant="danger" onClick={() => setCancelOpen(true)} className="flex-1">
+                    Stop auto-bidding
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <Button
@@ -179,7 +214,7 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
               disabled={!open}
               onClick={() => setBidOpen(true)}
             >
-              {open ? "Place a bid" : "Bidding closed"}
+              {open ? "Place a bid" : notYetOpen ? "Not open yet" : "Bidding closed"}
             </Button>
           )}
         </div>

@@ -67,7 +67,11 @@ export function CardStack({
   const behind = stack.cards.slice(1, DEPTH);
 
   // Live updates for what's on screen and just behind it, nothing more.
-  useLotSubscription(stack.cards.slice(0, SUBSCRIBE_AHEAD).map((lot) => lot.id));
+  useLotSubscription(
+    stack.cards
+      .slice(0, SUBSCRIBE_AHEAD)
+      .map((lot) => ({ id: lot.id, sequence: lot.bid_sequence })),
+  );
 
   if (stack.isPending) return <StackSkeleton />;
   if (stack.error && stack.cards.length === 0) {

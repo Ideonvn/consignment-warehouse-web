@@ -42,13 +42,16 @@ Judgement calls, backend requests, deferrals, and the final journey result.
 - **`GET /me/swipes` (or a `direction` filter on a global lots endpoint).** Swipes are only
   queryable per auction, so the "Interested" and "Passed" views fan out across every visible
   auction and merge client-side (`lib/hooks/useSwipedLots.ts`). One call would replace N.
-- **Lots stay `status: "live"` after `effective_ends_at` passes.** A bid then fails with 409 while
-  every list still reports the lot as live. Clients have to derive closure from the clock. Either
-  a closer that flips status promptly, or documenting that `status` is not authoritative for
-  "can I bid", would help.
-- **No `lot_closed` event was observed when a lot's clock ran out** (verified by moving a lot's
-  `effective_ends_at` to 50 seconds out via the admin API and watching a subscribed client). The
-  handler is implemented and the UI now closes itself off the clock, but the event never arrived.
+- **`status` is not authoritative for "can I bid" in the gap before the worker ticks.** Between
+  `effective_ends_at` passing and the lifecycle worker publishing `lot_closed`, the lot still reads
+  `status: "live"` over REST while any bid is refused with a 409. The gap is short (seconds), but
+  the client closes itself off the clock rather than waiting — see `isLotOpen`. Documenting the
+  gap would save the next client author the same discovery.
+- **`subscribe` takes one `after_sequence` for the whole batch.** A screen resubscribing to several
+  lots at once holds a different sequence per lot, so a single resume point cannot be right for all
+  of them: the lowest replays events some lots already have, the highest skips events others still
+  need. The client sends the lowest (duplicates are recoverable, gaps are not) and drops replays it
+  has already applied. A per-lot map — `{"lot_id": sequence}` — would make this exact.
 - **Frozen-field error shape is undocumented.** Observed in the wild as
   `{"detail": {"message": "...", "field": "effective_ends_at"}}` — a single `field` string.
   `lib/api/errors.ts` handles that plus plural `fields`/`frozen_fields` variants.
@@ -60,6 +63,17 @@ Judgement calls, backend requests, deferrals, and the final journey result.
   the HttpOnly refresh cookie flows; the backend must keep `Access-Control-Allow-Credentials: true`
   with a non-wildcard origin. (It does today.)
 
+## Resolved — not a backend bug
+
+An earlier run of this document reported that **no `lot_closed` event arrived when a lot's clock ran
+out**, and listed it as a backend gap. That was wrong, and nobody should re-investigate it.
+
+The lifecycle worker was simply not running during that run: a Docker Compose problem was silently
+failing `make deps`, so `make dev` came up without it. No lot ever actually closed, so no event
+could be published. The worker builds `LotClosedEvent` and publishes it (`app/worker/main.py`), and
+with the full stack up (`make dev-all` + `make seed`) every lifecycle event verified first time —
+`lot_closed`, `lot_opened` and `lot_extended` all arrive, with the payloads the spec describes.
+
 ## Deferred
 
 - **Per-lot `<title>`/OG metadata** — needs authenticated server rendering, which conflicts with
@@ -70,43 +84,83 @@ Judgement calls, backend requests, deferrals, and the final journey result.
   small request per bid on the lot detail screen only.
 - **Image optimization** — off until the media host is settled.
 
+## Lifecycle and realtime verification (full backend, worker running)
+
+Re-verified against `make dev-all` + `make seed`, driving a real browser with the app's WebSocket
+frames recorded, and a second and third seeded bidder acting as rivals. Test auctions were created
+through the admin API so that opens, closes and the anti-snipe window could be triggered on demand.
+
+| Test | Result |
+|---|---|
+| `lot_closed` over the socket | **Pass.** Three lots closing in the same tick delivered three events with distinct statuses: `ended_unsold` (no bids), `ended_reserve_not_met` (bid below reserve), and `ended_sold` (bidding pushed above reserve). |
+| Terminal states render differently | **Fixed, then pass.** They previously all collapsed into "Closed". See the fix below. |
+| `lot_opened` over the socket | **Pass.** A scheduled lot, watched from its detail screen, received `lot_opened` on the worker tick and became biddable without a reload. |
+| Anti-snipe `lot_extended` | **Pass.** A bid 1:44 from close produced `lot_extended` and the countdown moved to 4:56 with no refetch. |
+| Anti-snipe on the POST response | **Pass.** The same bid's `POST /bids` response carried `extended: true`, `extension_count: 1` and the new `effective_ends_at`. |
+| Resync with `after_sequence` | **Fixed, then pass.** Reconnect now resubscribes with `after_sequence: 1` and the server replays sequences 2, 3, 4, 5 — gap-free, no duplicates — followed by `resync_complete` at `latest_sequence: 5`. The screen went R2 500 / 1 bid → R2 650 / 5 bids. |
+
+### Defects found and fixed during this pass
+
+1. **Reconnect had no resume point (the big one).** The client only learned a lot's `sequence` from
+   bid events it had already seen over the socket. On a fresh page load nothing had been seen, so
+   `lastSequence` was 0, the resubscribe carried no `after_sequence`, and **every bid placed during
+   an outage was lost** — no replay, and the price stayed stale until something else refetched.
+   Proved it by blocking the socket, placing two bids, and watching the reconnect subscribe blind.
+   Fixed by seeding the resume point from REST: `useLotSubscription` now takes each lot's
+   `bid_sequence` alongside its id, so the resume point exists from first render.
+2. **The three terminal states were indistinguishable.** Every closed lot read "Closed", so a
+   bidder who won a lot and a bidder on a lot that never met its reserve saw the same thing.
+   `lib/format/lotStatus.ts` now maps status (plus "am I leading") to a label, a tone and a
+   sentence, used by the card face, lot detail, My Bids and the swiped lists: "You won" / "Sold" /
+   "Reserve not met" / "Unsold" / "No bids" / "Withdrawn" / "Cancelled".
+3. **Scheduled lots read as closed.** A lot that had not opened yet showed "Closed" and "Bidding
+   closed" — the same wording as a finished lot. It now shows "Opens in <countdown>", an explicit
+   "Bidding hasn't opened on this lot yet", and a disabled "Not open yet" button.
+4. **A won lot still offered "Stop auto-bidding".** The auto-bid controls rendered regardless of
+   whether the lot was still open, so a bidder who had just won one was invited to cancel automatic
+   bidding on it. Both controls are now hidden once the lot closes; the maximum itself stays visible.
+5. **Batched replays could rewind a price.** Because `subscribe` carries one `after_sequence` for
+   the whole batch (see above), a reconnect replays bids that some lots have already applied — and
+   applying an old bid would overwrite the current price with a stale amount. Bid events at or
+   below the last sequence seen for that lot are now dropped. The batching is confirmed from the
+   wire (an observed resubscribe carried `after_sequence: 4` for three lots at different
+   positions); the drop itself is a guard against that, not something I saw fire.
+6. **`minimum_next_bid_minor` went stale after socket updates.** Neither `bid` nor `resync_complete`
+   carries the new minimum, so "Next bid from …" kept the pre-bid figure — and the bid sheet would
+   open on it and take a recoverable 422. The lot is now refetched when a bid lands on a lot that is
+   actually loaded, which costs one small request per bid on the screen being watched.
+
 ## M10 journey result
 
-Walked end to end against the running backend (`localhost:8000`, seeded data) in a 390×844
-viewport, signed in as `+27820000004`, with `+27820000002` as the rival bidder and
-`+27820000001` (admin) used only to move one lot's closing time forward.
+Walked end to end against the complete backend (API + lifecycle worker, `make seed` applied) in a
+390×844 viewport as `+27820000004`, with `+27820000002` and `+27820000003` as rival bidders.
 
 | Step | Result |
 |---|---|
-| Log in with `0000` | Pass. OTP auto-submits on the 4th digit; new session lands on the intended destination (`?next=` preserved through the whole flow). |
-| Session survives reload | Pass. Access token is memory-only; the HttpOnly cookie drives a single refresh, then `GET /auth/me`. |
-| Browse auctions | Pass. "Spring Collectables" listed live-first with a live pill and closing countdown. |
-| Enter the stack | Pass. Three cards deep, unswiped lots only, ordered by lot number. |
-| Swipe left (drag) | Pass. Card tracks the pointer 1:1 with proportional rotation, "Pass" intent fades in, flies out left, `PUT /swipe {pass}` recorded. |
-| Swipe right (drag) | Pass. Records `interested` **and** opens the confirm sheet; the lot leaves the stack whether or not a bid follows. |
-| Confirm a bid | Pass. Sent `amount_minor = minimum_next_bid_minor`, `max_amount_minor = their number`. Result: "You're winning at R450." |
-| See it in My Bids | Pass. Grouped Winning / Outbid / Ended, with the user's own maximum on each row. |
+| Log in with `0000` | **Pass.** Signed out through the UI, re-entered `+27820000004`, typed `0000` digit by digit; it auto-submitted on the fourth and landed back on `/profile` — the destination the sign-out had come from. A hard reload then restored the session from the HttpOnly cookie alone. |
+| Browse auctions | Pass. Live auctions first with live pills and closing countdowns; scheduled ones listed as "Opens soon" and not enterable. |
+| Enter a stack | Pass. Three cards deep, unswiped lots only, ordered by lot number. |
+| Swipe left (drag) | Pass. Card tracks the pointer 1:1, "Pass" intent fades in, flies out left, `PUT /swipe {pass}` recorded. |
+| Swipe right (drag) | Pass. Records `interested` **and** opens the confirm sheet; the lot leaves the stack either way. |
+| Confirm a bid | Pass. Sheet showed the raise-only wording against the user's existing R2 500 maximum, and confirmed "You're winning at R2 500" with the new ceiling at R2 550. |
+| See it in My Bids | Pass. Grouped Winning / Outbid / Ended with each row's own maximum. |
 | Open lot detail | Pass. Gallery, price, minimum next bid, reserve marker, own maximum, bid history with own bids marked and auto-bids labelled. |
-| Raise the maximum | Pass. R450 → R900 via `PUT /auto-bid`. Price stayed at R450, as designed — raising while leading moves nothing and tells nobody. |
-| Rival bids higher | Pass. `+27820000002` bid from a separate session. |
-| First window updates live | Pass. Over the websocket: price R450 → R950, bid count, new minimum, `am_i_leading` flipped, price pulsed, and an "You've been outbid" toast with a one-tap raise. |
-| Let a lot close | **Partial.** The countdown reached zero and the screen switched to "Bidding closed" — but off the clock, not off a `lot_closed` event, which never arrived (see backend requests). The lot also still reports `status: "live"` over REST while rejecting bids with 409. |
-| Ended lot renders correctly | Pass, with the caveat above: pill reads "Bidding closed", the CTA is disabled, and the bid sheet refuses to open a form. |
+| Raise the maximum | Pass. `PUT /auto-bid`; raising while leading moved neither the price nor anyone else's view, as designed. |
+| Rival bids higher | Pass. Third bidder outbid from a separate session. |
+| First window updates live | Pass. R2 500 → R2 600, bid count 13 → 14, minimum next bid corrected to R2 650, `am_i_leading` flipped, price pulsed, and an "You've been outbid" toast with a one-tap raise. |
+| Let a lot close | **Pass.** A lot the user was winning closed on the worker tick: `lot_closed` with `status: ended_sold` arrived over the socket and the My Bids row moved Winning → Ended live. |
+| Ended lot renders correctly | **Pass.** That lot reads "You won" / "You won this lot."; a lot that closed below reserve reads "Reserve not met" / "Bidding ended below the seller's reserve, so this lot didn't sell."; a lot with no bids reads "No bids" / "This lot closed without a single bid." |
 
-Also verified during the walk: keyboard-only operation of the stack (Tab reaches it, ←/→ pass and
-bid, Escape closes the sheet and restores focus to the stack), un-passing from the Passed view
-returns the card to the front of the stack, and the palette against WCAG AA — every foreground /
-background pair in the design system scores 5.4:1 or better, the lowest being danger-on-raised.
+**On the login step:** partway through this run the backend's OTP rate limiter locked this IP out
+(`429`, `Retry-After: 2238`) after the many sign-ins the verification needed. The browser session
+itself was unaffected — it refreshes from its HttpOnly cookie — so the rest of the journey ran
+normally, and the login step was run last, once the limiter released and a request returned `200`
+again. Worth knowing that a heavy scripted test run will hit the 10/hour per-IP cap; the app's own
+`429` handling on `/login` was therefore never exercised through the UI.
 
-### Bugs found and fixed during verification
+### Test data left behind
 
-1. **Swipes did nothing.** The card's `<img>` started a native HTML5 drag, which swallowed the
-   pointer stream framer-motion needs. Fixed in `LotImage` (`draggable={false}` + `select-none`) so
-   every gesture surface benefits, not just the stack.
-2. **Cards were pinned in place.** `dragConstraints={{left: 0, right: 0}}` clamps a card to its
-   origin; removed in favour of free drag with `dragSnapToOrigin`, which is also what "follows the
-   finger 1:1" actually requires.
-3. **The outbid check read stale data.** `fetchQuery` honours `staleTime`, and the socket handler
-   had just written to that cache entry, so the refetch that decides "am I still leading" was
-   served from cache. Fixed with `staleTime: 0` on that one call.
-4. **Dead lots invited bids.** See `isLotOpen` above.
+Verification created several auctions through the admin API — "Verification Run", "Verification
+Closes", "Verification Anti-snipe", "Verification Sold", "Verification Opening", "Verification
+Scheduled" and "Journey Finale" — plus bids on the seeded Spring Collectables lots. They are
+harmless but visible in the app; `make seed` on a fresh database clears them.
