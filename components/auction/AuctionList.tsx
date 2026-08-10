@@ -99,7 +99,11 @@ function AuctionCard({ auction }: { auction: Auction }) {
         ) : null}
 
         <div className="mt-3 flex items-center justify-between text-sm">
-          <span className="text-text-muted">
+          <span className="flex items-center gap-2 text-text-muted">
+            <span className="tabular">
+              {auction.lot_count} lot{auction.lot_count === 1 ? "" : "s"}
+            </span>
+            <span aria-hidden>·</span>
             {isScheduled ? (
               <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
             ) : isLive ? (

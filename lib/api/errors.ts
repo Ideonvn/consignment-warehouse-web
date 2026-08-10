@@ -37,14 +37,18 @@ export class BidTooLowError extends ApiError {
   }
 }
 
-/** A field can no longer be changed (e.g. once bidding has started). */
+/**
+ * A field can no longer be changed (e.g. once bidding has started). Declared by
+ * the backend as `FrozenFieldOut`: `{detail: {message, field}}`. Admin-only in
+ * practice, so it should rarely reach this client at all.
+ */
 export class FrozenFieldError extends ApiError {
-  readonly fields: string[];
+  readonly field: string;
 
-  constructor(status: number, message: string, fields: string[], detail: unknown) {
+  constructor(status: number, message: string, field: string, detail: unknown) {
     super(status, message, detail);
     this.name = "FrozenFieldError";
-    this.fields = fields;
+    this.field = field;
   }
 }
 
@@ -111,14 +115,8 @@ export function toApiError(status: number, body: unknown, retryAfter: number | n
       return new BidTooLowError(message, minimum, detail);
     }
 
-    // Observed shape: {"detail": {"message": "...", "field": "effective_ends_at"}}.
-    // Plural variants are accepted too, in case the backend groups them later.
-    const frozen = structured.field ?? structured.frozen_fields ?? structured.fields;
-    if (typeof frozen === "string") {
-      return new FrozenFieldError(status, message, [frozen], detail);
-    }
-    if (Array.isArray(frozen)) {
-      return new FrozenFieldError(status, message, frozen.map(String), detail);
+    if (typeof structured.field === "string") {
+      return new FrozenFieldError(status, message, structured.field, detail);
     }
 
     return new ApiError(status, message, detail, retryAfter);

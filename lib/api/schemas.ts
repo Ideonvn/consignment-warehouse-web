@@ -56,6 +56,8 @@ export const auctionSchema = z.object({
   anti_snipe_window_seconds: z.number(),
   anti_snipe_extension_seconds: z.number(),
   max_extensions: z.number(),
+  // Declared with a server-side default rather than as required.
+  lot_count: z.number().default(0),
 });
 
 export const auctionListSchema = z.array(auctionSchema);
@@ -205,12 +207,13 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
     extension_count: z.number(),
   }),
   z.object({
-    // The document abbreviates this payload as `{...}`; only `lot_id` is
-    // guaranteed, so anything else is treated as optional.
+    // An admin moved the auction's clock and the cascade moved this lot. Unlike
+    // `lot_extended` this can move the close time in *either* direction.
     type: z.literal("lot_rescheduled"),
     lot_id: z.string(),
-    effective_ends_at: z.string().nullish(),
-    status: lotStatusSchema.nullish(),
+    scheduled_ends_at: z.string(),
+    effective_ends_at: z.string(),
+    extension_count: z.number(),
   }),
   z.object({
     type: z.literal("lot_closed"),
@@ -231,7 +234,13 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
     status: lotStatusSchema,
     current_bid_minor: z.number().nullable(),
   }),
-  z.object({ type: z.literal("resync_too_far"), lot_id: z.string() }),
+  z.object({
+    // Built from the same state dict as `resync_complete`, so it carries the
+    // lot's current sequence even though it replays nothing.
+    type: z.literal("resync_too_far"),
+    lot_id: z.string(),
+    latest_sequence: z.number(),
+  }),
   z.object({ type: z.literal("pong") }),
   z.object({ type: z.literal("ping") }),
   z.object({

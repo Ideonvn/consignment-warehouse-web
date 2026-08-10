@@ -7,7 +7,8 @@ import type { BidResult, LotCard, LotDetail, MyBid } from "@/types/api";
  * and the websocket feed land here, so a component never needs its own wiring.
  */
 
-type LotPatch = Partial<LotCard> & Partial<Pick<LotDetail, "am_i_leading" | "my_auto_bid_max_minor">>;
+type LotPatch = Partial<LotCard> &
+  Partial<Pick<LotDetail, "am_i_leading" | "my_auto_bid_max_minor" | "scheduled_ends_at">>;
 
 type LotPage = { data: LotCard[]; meta: unknown };
 type LotPages = { pages: LotPage[]; pageParams: unknown[] };

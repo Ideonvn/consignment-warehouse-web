@@ -39,29 +39,46 @@ Judgement calls, backend requests, deferrals, and the final journey result.
 
 ## Backend requests
 
-- **`GET /me/swipes` (or a `direction` filter on a global lots endpoint).** Swipes are only
-  queryable per auction, so the "Interested" and "Passed" views fan out across every visible
-  auction and merge client-side (`lib/hooks/useSwipedLots.ts`). One call would replace N.
-- **`status` is not authoritative for "can I bid" in the gap before the worker ticks.** Between
-  `effective_ends_at` passing and the lifecycle worker publishing `lot_closed`, the lot still reads
-  `status: "live"` over REST while any bid is refused with a 409. The gap is short (seconds), but
-  the client closes itself off the clock rather than waiting — see `isLotOpen`. Documenting the
-  gap would save the next client author the same discovery.
-- **`subscribe` takes one `after_sequence` for the whole batch.** A screen resubscribing to several
-  lots at once holds a different sequence per lot, so a single resume point cannot be right for all
-  of them: the lowest replays events some lots already have, the highest skips events others still
-  need. The client sends the lowest (duplicates are recoverable, gaps are not) and drops replays it
-  has already applied. A per-lot map — `{"lot_id": sequence}` — would make this exact.
-- **Frozen-field error shape is undocumented.** Observed in the wild as
-  `{"detail": {"message": "...", "field": "effective_ends_at"}}` — a single `field` string.
-  `lib/api/errors.ts` handles that plus plural `fields`/`frozen_fields` variants.
-- **`lot_rescheduled` payload is abbreviated** in the spec (`{"type":"lot_rescheduled","lot_id",...}`),
-  so it is parsed as `lot_id` plus optional `effective_ends_at`/`status`.
-- **No lot count on the auction object.** The auction list shows name, image, status and countdown
-  but not "12 lots", because it isn't derivable without paging every lot of every auction.
+- **Bidding is gated on `effective_ends_at`, never on `status`.** This is documented, intended
+  backend behaviour rather than a surprise: `status` labels an *outcome*, so it stays `live` until
+  the lifecycle worker has decided how the lot ended, while any bid past `effective_ends_at` is
+  already refused with a 409. `isLotOpen` encodes that rule in one place and every screen uses it.
 - **CORS with credentials is required.** The client sends `credentials: "include"` on every call so
   the HttpOnly refresh cookie flows; the backend must keep `Access-Control-Allow-Credentials: true`
   with a non-wildcard origin. (It does today.)
+
+## Known gaps
+
+Accepted, not outstanding — deliberately not being chased.
+
+- **`LotCardOut` carries no `currency_code`, and `SwipedList` fetches the auctions list to resolve
+  it.** A lot card names only its `auction_id`, while `/me/swipes` spans auctions by design, so the
+  Interested and Passed views map `auction_id -> currency_code` from the auctions list. **That extra
+  fetch is intentional and should stay:** ZAR is expected to remain the only currency, so the cost
+  is one cached, already-warm request rather than a schema change, and money still renders from the
+  auction's own `currency_code` instead of a hardcoded symbol. If a second currency ever appears
+  this stays correct as written; only the reason for keeping it changes.
+
+## Backend surface adopted
+
+The backend was extended in response to the requests above, and the client workarounds they
+justified are gone:
+
+- **`GET /me/swipes?direction=&limit=&offset=`** replaced the per-auction fan-out. The Interested
+  and Passed views now make one paged call each and render the returned lot cards directly, in the
+  server's most-recently-swiped order (`lib/hooks/useSwipedLots.ts`). Currency is resolved from the
+  auctions list by design — see Known gaps.
+- **`AuctionOut.lot_count`** is shown on each auction card.
+- **`subscribe.after_sequences`** replaced the scalar compromise. Each lot now resumes from its own
+  sequence, so a batched reconnect neither replays nor skips. The de-duplication added when the
+  scalar form forced replays is kept as a safety net. A `bad_after_sequences` error is handled
+  explicitly: it is logged, the batch is resubscribed without resume hints, and those lots are
+  refilled over REST rather than left with an invisible hole.
+- **`FrozenFieldOut`** is a documented `{message, field}` pair, so the speculative plural handling
+  is removed.
+- **`lot_rescheduled`** is fully specified and carries `scheduled_ends_at`, `effective_ends_at` and
+  `extension_count`. It is applied as an absolute value, so an admin pulling a close time *earlier*
+  shortens the countdown — unlike `lot_extended`, which only ever moves later.
 
 ## Resolved — not a backend bug
 
@@ -78,7 +95,6 @@ with the full stack up (`make dev-all` + `make seed`) every lifecycle event veri
 
 - **Per-lot `<title>`/OG metadata** — needs authenticated server rendering, which conflicts with
   the memory-only access token. See the judgement call above.
-- **Auction lot counts** — not derivable from the API; see the backend request above.
 - **Bid history live-splicing.** A `bid` event invalidates the paginated history and lets it
   refetch, rather than splicing the new bid into page one. Simpler and always correct; costs one
   small request per bid on the lot detail screen only.

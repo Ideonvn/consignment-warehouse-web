@@ -131,6 +131,16 @@ export function deleteSwipe(lotId: string): Promise<void> {
   return apiGet(`/lots/${lotId}/swipe`, { method: "DELETE" });
 }
 
+/**
+ * Every lot this user has swiped, across auctions, most-recently-swiped first.
+ * Same card shape as the stack, so rows render directly.
+ */
+export function listMySwipes(
+  params: { direction?: SwipeDirection; limit?: number; offset?: number } = {},
+): Promise<LotCard[]> {
+  return apiGet("/me/swipes", { schema: lotCardListSchema, query: params });
+}
+
 /* ------------------------------------------------------------- bidding --- */
 
 export function placeBid(

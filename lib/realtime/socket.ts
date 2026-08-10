@@ -18,8 +18,8 @@ type Listener = (message: ServerMessage) => void;
  * One socket for the whole app.
  *
  * Components declare which lots they care about; this keeps the subscription
- * set, reconnects with `after_sequence` so nothing is missed, and hands parsed
- * messages to a single listener that writes them into the query cache.
+ * set, reconnects with a per-lot `after_sequences` map so nothing is missed, and
+ * hands parsed messages to a single listener that writes them into the cache.
  */
 class RealtimeClient {
   private socket: WebSocket | null = null;
@@ -32,9 +32,17 @@ class RealtimeClient {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
   private connecting = false;
+  /** The lot ids of the most recent subscribe, for recovering a rejected resume. */
+  private lastBatch: string[] = [];
+  private onResumeRejected: ((lotIds: string[]) => void) | null = null;
 
   setListener(listener: Listener | null): void {
     this.listener = listener;
+  }
+
+  /** Called with the lots whose replay was refused and must be refetched. */
+  setResumeRejectedHandler(handler: ((lotIds: string[]) => void) | null): void {
+    this.onResumeRejected = handler;
   }
 
   start(): void {
@@ -95,16 +103,34 @@ class RealtimeClient {
     if (batch.length === 0) return;
 
     const { lastSequence } = useRealtimeStore.getState();
-    // Subscribing from the lowest known sequence replays every gap in one trip.
-    const after = batch
-      .map((lotId) => lastSequence[lotId] ?? 0)
-      .filter((sequence) => sequence > 0);
+    // Sequences are per lot, so each lot resumes from its own position. The
+    // scalar `after_sequence` could only ever be one compromise for the batch.
+    const afterSequences: Record<string, number> = {};
+    for (const lotId of batch) {
+      const sequence = lastSequence[lotId] ?? 0;
+      if (sequence > 0) afterSequences[lotId] = sequence;
+    }
 
+    this.lastBatch = batch;
     this.send({
       action: "subscribe",
       lot_ids: batch,
-      ...(after.length > 0 ? { after_sequence: Math.min(...after) } : {}),
+      ...(Object.keys(afterSequences).length > 0 ? { after_sequences: afterSequences } : {}),
     });
+  }
+
+  /**
+   * The server rejected our resume map, so the replay we asked for never
+   * happened. Resubscribe plainly and tell the app to refill those lots over
+   * REST — rendering the gap silently would lose bids.
+   */
+  private handleRejectedResume(detail: string | null | undefined): void {
+    const batch = this.lastBatch;
+    console.error("Realtime rejected after_sequences", { detail, lotIds: batch });
+    if (batch.length === 0) return;
+
+    this.send({ action: "subscribe", lot_ids: batch });
+    this.onResumeRejected?.(batch);
   }
 
   private async open(): Promise<void> {
@@ -184,6 +210,11 @@ class RealtimeClient {
       return;
     }
     if (message.type === "pong") return;
+
+    if (message.type === "error" && message.code === "bad_after_sequences") {
+      this.handleRejectedResume(message.detail);
+      return;
+    }
 
     if (message.type === "subscribed") {
       for (const lotId of message.lot_ids) this.confirmed.add(lotId);

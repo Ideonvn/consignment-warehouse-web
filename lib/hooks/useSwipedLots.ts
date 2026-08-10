@@ -1,36 +1,29 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { listAuctions, listLots } from "@/lib/api/endpoints";
-import { queryKeys } from "@/lib/api/queryKeys";
-import type { Auction, LotCard, SwipeDirection } from "@/types/api";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { listMySwipes } from "@/lib/api/endpoints";
+import type { SwipeDirection } from "@/types/api";
 
-export type SwipedLot = { lot: LotCard; auction: Auction };
+const PAGE_SIZE = 25;
 
 /**
- * Swipes are only queryable per auction, so the "Interested" and "Passed" views
- * fan out across the auctions the user can see. See NOTES.md — a single
- * `/me/swipes` endpoint would replace this.
+ * The "Interested" and "Passed" views. `GET /me/swipes` returns lot cards across
+ * every auction, already ordered most-recently-swiped first — so this does not
+ * re-sort.
  */
 export function useSwipedLots(direction: SwipeDirection) {
-  const auctions = useQuery({
-    queryKey: queryKeys.auctions(),
-    queryFn: () => listAuctions({ limit: 50 }),
+  const query = useInfiniteQuery({
+    queryKey: ["swiped", direction],
+    queryFn: ({ pageParam }) =>
+      listMySwipes({ direction, limit: PAGE_SIZE, offset: pageParam }),
+    initialPageParam: 0,
+    // Offset paginated: a short page is the last one.
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < PAGE_SIZE ? undefined : allPages.length * PAGE_SIZE,
   });
 
-  const auctionIds = (auctions.data ?? []).map((auction) => auction.id);
-
-  return useQuery({
-    queryKey: ["swiped", direction, auctionIds.join(",")],
-    enabled: auctions.data !== undefined,
-    queryFn: async (): Promise<SwipedLot[]> => {
-      const perAuction = await Promise.all(
-        (auctions.data ?? []).map(async (auction) => {
-          const { data } = await listLots(auction.id, { direction, limit: 100 });
-          return data.map((lot) => ({ lot, auction }));
-        }),
-      );
-      return perAuction.flat().sort((a, b) => a.lot.lot_number - b.lot.lot_number);
-    },
-  });
+  return {
+    ...query,
+    lots: query.data?.pages.flat() ?? [],
+  };
 }

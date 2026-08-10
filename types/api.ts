@@ -48,7 +48,13 @@ export type WsTicket = z.infer<typeof wsTicketSchema>;
 export type ServerMessage = z.infer<typeof serverMessageSchema>;
 
 export type ClientMessage =
-  | { action: "subscribe"; lot_ids: string[]; after_sequence?: number }
+  | {
+      action: "subscribe";
+      lot_ids: string[];
+      /** Per-lot resume points. Wins over the scalar form when present. */
+      after_sequences?: Record<string, number>;
+      after_sequence?: number;
+    }
   | { action: "unsubscribe"; lot_ids: string[] }
   | { action: "resync"; lot_id: string; after_sequence: number }
   | { action: "ping" };

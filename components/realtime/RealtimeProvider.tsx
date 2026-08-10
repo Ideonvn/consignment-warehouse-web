@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/auth/session";
-import { applyServerMessage } from "@/lib/realtime/events";
+import { applyServerMessage, refetchLots } from "@/lib/realtime/events";
 import { realtime } from "@/lib/realtime/socket";
 import { formatMoney } from "@/lib/format/money";
 import { useToast } from "@/components/ui/Toast";
@@ -37,10 +37,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           }),
       }),
     );
+    // If the server refuses our resume points there is no replay coming, so the
+    // affected lots are refilled over REST rather than left with a hole.
+    realtime.setResumeRejectedHandler((lotIds) => refetchLots(queryClient, lotIds));
     realtime.start();
 
     return () => {
       realtime.setListener(null);
+      realtime.setResumeRejectedHandler(null);
       realtime.stop();
     };
   }, [status, queryClient, showToast, router]);

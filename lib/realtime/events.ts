@@ -12,6 +12,16 @@ export type EventEffects = {
   onExtended: (lotId: string, endsAt: string) => void;
 };
 
+/** Pulls the given lots back from REST when the socket cannot be trusted to. */
+export function refetchLots(queryClient: QueryClient, lotIds: string[]): void {
+  for (const lotId of lotIds) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.bids(lotId) });
+  }
+  void queryClient.invalidateQueries({ queryKey: ["lots"] });
+  void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
+}
+
 /**
  * Turns a socket message into cache writes. Components read the cache, so none
  * of them need socket wiring of their own.
@@ -82,15 +92,17 @@ export function applyServerMessage(
     }
 
     case "lot_rescheduled": {
-      if (message.effective_ends_at) {
-        patchLot(queryClient, message.lot_id, {
-          effective_ends_at: message.effective_ends_at,
-          ...(message.status ? { status: message.status } : {}),
-        });
-        patchMyBid(queryClient, message.lot_id, { effective_ends_at: message.effective_ends_at });
-      } else {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.lot(message.lot_id) });
-      }
+      // An admin moved the auction's clock. Unlike an anti-snipe extension this
+      // can pull the close time *earlier*, so the new value is applied as-is
+      // rather than treated as a later bound.
+      patchLot(queryClient, message.lot_id, {
+        scheduled_ends_at: message.scheduled_ends_at,
+        effective_ends_at: message.effective_ends_at,
+        extension_count: message.extension_count,
+      });
+      patchMyBid(queryClient, message.lot_id, {
+        effective_ends_at: message.effective_ends_at,
+      });
       return;
     }
 
@@ -129,6 +141,11 @@ export function applyServerMessage(
     }
 
     case "resync_too_far": {
+      // No replay is coming, but the server still told us where the lot is now.
+      // Recording it is what stops the next bid from looking like a fresh gap
+      // and asking for a resync that can only be refused again.
+      store.noteSequence(message.lot_id, message.latest_sequence);
+
       // The gap is beyond what the server will replay — refetch over REST.
       void queryClient.invalidateQueries({ queryKey: queryKeys.lot(message.lot_id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.bids(message.lot_id) });
