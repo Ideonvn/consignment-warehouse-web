@@ -135,7 +135,7 @@ export function CardStack({
               action={
                 <Link
                   href="/my-bids?view=passed"
-                  className="inline-flex min-h-11 items-center rounded-full bg-accent px-5 font-semibold text-accent-ink"
+                  className="inline-flex min-h-11 items-center rounded-full border border-accent-edge bg-accent px-5 font-semibold text-accent-ink"
                 >
                   See what you passed
                 </Link>

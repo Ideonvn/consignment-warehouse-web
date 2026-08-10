@@ -217,7 +217,9 @@ function BidSheetBody({
         <div
           className={cn(
             "mt-2 flex items-center gap-2 rounded-2xl border bg-surface-raised px-4",
-            validationError ? "border-danger/60" : "border-border focus-within:border-accent/60",
+            validationError
+              ? "border-danger/60"
+              : "border-border-strong focus-within:border-accent-text/60",
           )}
         >
           <span className="text-2xl text-text-muted">{currencySymbol(currency)}</span>

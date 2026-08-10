@@ -108,7 +108,7 @@ export function VerifyOtpForm() {
         <h1 className="text-3xl font-semibold tracking-tight">Enter your code</h1>
         <p className="mt-2 text-text-muted">
           Sent to <span className="tabular text-text">{formatPhoneForDisplay(phone ?? "")}</span>.{" "}
-          <Link href="/login" className="text-accent underline underline-offset-4">
+          <Link href="/login" className="text-accent-text underline underline-offset-4">
             Change
           </Link>
         </p>

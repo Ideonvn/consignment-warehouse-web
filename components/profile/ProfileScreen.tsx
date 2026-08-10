@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { PhoneColumn } from "@/components/layout/PhoneColumn";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
+import { ThemeSetting } from "@/components/theme/ThemeSetting";
 
 export function ProfileScreen() {
   const router = useRouter();
@@ -92,6 +93,10 @@ export function ProfileScreen() {
         <Button onClick={save} loading={saving} fullWidth>
           Save changes
         </Button>
+      </div>
+
+      <div className="mt-6">
+        <ThemeSetting />
       </div>
 
       <div className="mt-6 flex flex-col gap-2">

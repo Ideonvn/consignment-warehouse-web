@@ -113,7 +113,7 @@ function AuctionCard({ auction }: { auction: Auction }) {
             )}
           </span>
           {enterable ? (
-            <span className="font-semibold text-accent">
+            <span className="font-semibold text-accent-text">
               {isLive ? "Enter stack →" : "View lots →"}
             </span>
           ) : null}

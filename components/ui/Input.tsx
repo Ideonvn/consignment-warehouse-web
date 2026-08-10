@@ -43,8 +43,8 @@ export function Input({
       <div
         className={cn(
           "flex items-center gap-2 rounded-2xl border bg-surface-raised px-4",
-          "focus-within:border-accent/60",
-          error ? "border-danger/60" : "border-border",
+          "focus-within:border-accent-text/60",
+          error ? "border-danger/60" : "border-border-strong",
         )}
       >
         {prefix ? <span className="shrink-0 text-text-muted tabular">{prefix}</span> : null}

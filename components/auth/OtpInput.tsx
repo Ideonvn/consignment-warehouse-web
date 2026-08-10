@@ -99,8 +99,8 @@ export function OtpInput({
           aria-invalid={invalid || undefined}
           className={cn(
             "tabular h-16 w-full rounded-2xl border bg-surface-raised text-center text-2xl font-semibold",
-            "outline-none focus:border-accent disabled:opacity-50",
-            invalid ? "border-danger/60" : "border-border",
+            "outline-none focus:border-accent-text disabled:opacity-50",
+            invalid ? "border-danger/60" : "border-border-strong",
           )}
         />
       ))}

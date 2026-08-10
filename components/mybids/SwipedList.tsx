@@ -75,7 +75,7 @@ export function SwipedList({ direction }: { direction: SwipeDirection }) {
         action={
           <Link
             href="/"
-            className="inline-flex min-h-11 items-center rounded-full bg-accent px-5 font-semibold text-accent-ink"
+            className="inline-flex min-h-11 items-center rounded-full border border-accent-edge bg-accent px-5 font-semibold text-accent-ink"
           >
             Back to the stack
           </Link>
@@ -101,7 +101,7 @@ export function SwipedList({ direction }: { direction: SwipeDirection }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{lot.title}</p>
-                  <p className="mt-1 text-lg font-semibold text-accent">
+                  <p className="mt-1 text-lg font-semibold text-accent-text">
                     <Money
                       minor={hasBids ? (lot.current_bid_minor ?? 0) : lot.starting_price_minor}
                       currency={currencyFor(lot.auction_id)}

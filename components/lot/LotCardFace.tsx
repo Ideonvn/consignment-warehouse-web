@@ -68,7 +68,7 @@ export function LotCardFace({
             <p
               key={pulse}
               className={cn(
-                "text-3xl font-semibold text-accent",
+                "text-3xl font-semibold text-accent-text",
                 pulse > 0 && "animate-pulse-accent",
               )}
             >

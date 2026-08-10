@@ -65,7 +65,7 @@ export function LotGallery({
               <span
                 className={cn(
                   "block h-1.5 rounded-full transition-all",
-                  index === active ? "w-5 bg-accent" : "w-1.5 bg-text-muted/60",
+                  index === active ? "w-5 bg-accent-text" : "w-1.5 bg-text-muted/60",
                 )}
               />
             </button>

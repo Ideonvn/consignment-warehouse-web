@@ -104,7 +104,7 @@ export function BiddingList() {
           action={
             <Link
               href="/"
-              className="inline-flex min-h-11 items-center rounded-full bg-accent px-5 font-semibold text-accent-ink"
+              className="inline-flex min-h-11 items-center rounded-full border border-accent-edge bg-accent px-5 font-semibold text-accent-ink"
             >
               Find something
             </Link>
@@ -189,7 +189,7 @@ function BidRow({
             </span>
           </div>
 
-          <p className="mt-1 text-lg font-semibold text-accent">
+          <p className="mt-1 text-lg font-semibold text-accent-text">
             <Money minor={row.current_bid_minor ?? 0} currency={currency} />
           </p>
 

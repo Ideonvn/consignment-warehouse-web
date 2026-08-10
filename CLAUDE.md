@@ -28,8 +28,10 @@ Locked decisions. Don't swap them out without a reason that survives the one bel
 - **zod** — validates every response at the boundary. `types/api.ts` is `z.infer` over those
   schemas, so a backend change surfaces as one clear parse error instead of `undefined` three
   components deep. Change the schema, not the type.
-- **Tailwind v4** with theme tokens in `app/globals.css` (`@theme`). Dark, high-contrast,
-  photo-first; one accent used sparingly.
+- **Tailwind v4** with the palette in `app/globals.css`. Dark, high-contrast, photo-first; one
+  accent used sparingly. Light/Dark/System is layered on top of it — see Theming, and read that
+  before touching a colour.
+- **next-themes** — pre-paint theme application; see Theming for why it earns its place.
 
 ## Rules that are load-bearing
 
@@ -92,6 +94,66 @@ may see. `reserve_price_minor` is admin-only and must not be requested, stored o
 and per lot — server-owned. Read it from the lot, from the bid response, or from the 422 that tells
 you someone bid first.
 
+## Theming
+
+Light / Dark / System, selectable on `/profile`. **Dark is the default and the product's
+identity**; light exists for daylight readability and is opt-in.
+
+**The palette is declared twice on purpose.** Raw tokens (`--bg`, `--accent`, ...) live on `:root`,
+and `@theme inline` maps them to Tailwind's names (`--color-bg` -> `var(--bg)`). Tailwind resolves
+`@theme` statically, so a palette declared directly there cannot be overridden — with the
+indirection, one `[data-theme="light"]` block re-points the raw tokens and every existing `bg-bg`,
+`text-text` and `border-border` follows. Add new colours as a raw token plus an `@theme inline`
+mapping, never as a literal.
+
+**The accent is not a neutrals problem.** `#E8FF5A` is ~1.1:1 against white — invisible. So there
+are three accent tokens, and which one you reach for depends on how the colour is used:
+
+| Token | Use | Dark | Light |
+|---|---|---|---|
+| `--accent` | brand **fills** (buttons, selected tab, logo) | `#E8FF5A` | `#E8FF5A` — unchanged |
+| `--accent-text` | accent as **text**, and thin marks that must be seen (focus rings, live dot, toast bar, gallery dot) | `#E8FF5A` | `#5C6B00` — darkened same hue |
+| `--accent-edge` | border on a brand fill | `transparent` | `#5C6B00` |
+
+`--accent-edge` is why the lime button still reads as a button on white: the fill itself is only
+1.11:1 against a white card, which fails the 3:1 needed for a non-text boundary, so light gives it
+an edge instead of abandoning the brand colour. In dark it is transparent and nothing shifts.
+`--border-strong` marks control boundaries (inputs) as distinct from decorative card edges; in dark
+it equals `--border`, so the shipped look is untouched.
+
+Measured ratios (WCAG AA: 4.5:1 body text, 3:1 large text and non-text boundaries):
+
+| Pairing | Dark | Light |
+|---|---|---|
+| text on bg / surface / raised | 18.2 / 16.9 / 15.3 | 16.4 / 18.0 / 15.5 |
+| muted text on bg / surface / raised | 7.1 / 6.6 / 6.0 | 5.8 / 6.4 / 5.4 |
+| accent-text on bg / surface / raised | 17.8 / 16.5 / 15.0 | 5.4 / 5.9 / 5.1 |
+| accent-text on the `accent/10` tint | 12.8 | 5.8 |
+| accent-ink on the accent fill (button label) | 17.8 | 17.8 |
+| danger on bg / surface / tint | 6.5 / 6.0 / 5.4 | 6.0 / 6.6 / 5.6 |
+| success on bg / surface / tint | 11.4 / 10.6 / 8.8 | 6.7 / 7.3 / 6.3 |
+| accent fill vs surface (button edge) | 16.5 | 1.11 -> `--accent-edge` at 5.9 |
+| input border vs its fill | 1.16 (see below) | 3.12 |
+
+Two were caught by measuring and fixed before shipping: light `success` at `#15803D` scored 4.38 on
+its own tint (below 4.5, now `#146B33`), and the light accent fill needed the edge token. **Card
+photos:** light surfaces are neutral white so lot photography still dominates — that is why dark was
+chosen originally and the light theme must not tint it away.
+
+**Known deviation:** the *decorative* card border is ~1.3:1 in both themes, and the dark input
+border is 1.16:1 — both pre-date theming and are unchanged here. Light inputs use `--border-strong`
+because they would otherwise be imperceptible; raising dark's `--border-strong` to ~`#6C6F78` would
+close the dark gap, and is a one-line change if wanted.
+
+**No flash of the wrong theme.** `next-themes` injects a script that sets `data-theme` before first
+paint — a dark-mode user must never see a white flash. It also handles the OS theme changing while
+the app is open, cross-tab sync, and the SSR/client mismatch (hence `suppressHydrationWarning` on
+`<html>`). `enableColorScheme` keeps the CSS `color-scheme` in step so native controls, scrollbars
+and autofill follow. `viewport.themeColor` can only vary by media query, which follows the OS, so
+`ThemeProvider` rewrites the `theme-color` meta to the resolved theme's background — otherwise an
+explicit Light choice on a dark OS keeps a black status bar. The theme change is deliberately not
+animated: a whole-page cross-fade is jarring and costly.
+
 ## Structure
 
 - `app/` — routes. `(app)/` is everything behind the sign-in wall (guard, bottom nav, realtime
@@ -132,6 +194,9 @@ per lot.
 
 - **No new dependencies** without a reason that maps to the stack above. No component library —
   build the primitive.
+- `next-themes` is the one dependency added outside the original stack: it exists for the
+  pre-paint script, OS-change handling, cross-tab sync and SSR agreement, all of which are easy to
+  hand-roll incorrectly.
 - **Never put the access token in storage**, and never read the refresh token from JS.
 - **Never compute `minimum_next_bid_minor`, or reveal a reserve amount.**
 - **Don't create git commits.** Stage the work and let the developer review it.
@@ -146,6 +211,10 @@ Accepted, with reasons. Please don't re-raise them.
   `currency_code`, and `/me/swipes` spans auctions by design. The extra fetch is intentional: ZAR is
   expected to remain the only currency, so this costs one cached request rather than a schema
   change, and money still renders from the auction's own currency instead of a hardcoded symbol.
+- **The theme preference is `localStorage` only, never synced to the backend.** Theme is genuinely
+  per-device — the same person wants dark on a phone at night and light on a laptop in daylight — so
+  syncing it across devices would be wrong behaviour, not a missing feature. Do not "fix" this by
+  adding a user field.
 - **Lot pages have static metadata.** Per-lot titles would need authenticated server rendering,
   which conflicts with the memory-only access token.
 - **Bid history refetches rather than splicing** a new bid into page one. Simpler and always

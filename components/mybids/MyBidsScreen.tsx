@@ -39,7 +39,7 @@ export function MyBidsScreen() {
             className={cn(
               "min-h-11 flex-1 rounded-full border px-3 text-sm font-medium transition-colors",
               view === tab.id
-                ? "border-accent bg-accent text-accent-ink"
+                ? "border-accent-edge bg-accent text-accent-ink"
                 : "border-border bg-surface-raised text-text-muted hover:text-text",
             )}
           >

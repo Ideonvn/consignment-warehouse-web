@@ -59,7 +59,7 @@ export function BidHistory({ lotId, currency }: { lotId: string; currency: strin
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">
                 {bid.is_mine ? (
-                  <span className="text-accent">You</span>
+                  <span className="text-accent-text">You</span>
                 ) : (
                   <span className="text-text">{bid.bidder_handle}</span>
                 )}
@@ -76,7 +76,7 @@ export function BidHistory({ lotId, currency }: { lotId: string; currency: strin
                 {now === null ? "" : formatRelativePast(bid.created_at, now)}
               </p>
             </div>
-            <p className={cn("text-sm font-semibold", bid.is_mine ? "text-accent" : "text-text")}>
+            <p className={cn("text-sm font-semibold", bid.is_mine ? "text-accent-text" : "text-text")}>
               <Money minor={bid.amount_minor} currency={currency} />
             </p>
           </li>

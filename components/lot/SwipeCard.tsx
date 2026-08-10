@@ -93,7 +93,7 @@ export function SwipeCard({
       <motion.div
         aria-hidden
         style={{ opacity: reduceMotion ? 0 : bidOpacity }}
-        className="pointer-events-none absolute top-8 right-6 rotate-12 rounded-xl border-2 border-accent bg-accent/10 px-4 py-2 text-lg font-bold tracking-widest text-accent uppercase"
+        className="pointer-events-none absolute top-8 right-6 rotate-12 rounded-xl border-2 border-accent-text bg-accent/10 px-4 py-2 text-lg font-bold tracking-widest text-accent-text uppercase"
       >
         Bid
       </motion.div>

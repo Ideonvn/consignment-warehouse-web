@@ -1,17 +1,79 @@
 @import "tailwindcss";
 
-@theme {
-  /* Dark, high-contrast, photo-first. One accent, used sparingly. */
-  --color-bg: #0a0a0b;
-  --color-surface: #141416;
-  --color-surface-raised: #1e1e21;
-  --color-border: #2a2a2e;
-  --color-text: #f5f5f6;
-  --color-text-muted: #9a9aa2;
-  --color-accent: #e8ff5a;
-  --color-accent-ink: #0a0a0b;
-  --color-danger: #ff5a5a;
-  --color-success: #4ade80;
+/*
+ * Dark, high-contrast, photo-first. One accent, used sparingly.
+ *
+ * The palette lives here as RAW tokens, and `@theme inline` below maps them to
+ * Tailwind's colour names. The indirection is what makes theming possible at
+ * all: Tailwind resolves `@theme` values statically, so a palette declared
+ * directly there cannot be overridden per theme. Declared this way, a single
+ * `[data-theme]` block re-points the raw tokens and every existing `bg-bg`,
+ * `text-text` and `border-border` follows automatically.
+ */
+:root {
+  --bg: #0a0a0b;
+  --surface: #141416;
+  --surface-raised: #1e1e21;
+  --border: #2a2a2e;
+  --text: #f5f5f6;
+  --text-muted: #9a9aa2;
+  --accent: #e8ff5a;
+  --accent-ink: #0a0a0b;
+  /* Accent-coloured *text*, and any small accent mark that has to be SEEN
+     against a surface. On dark that is the brand colour itself; on light the
+     lime is ~1.1:1 against white, so light re-points this to a darkened
+     reading of the same hue. */
+  --accent-text: #e8ff5a;
+  /* Edge on a brand-filled surface. Dark needs none — the lime already sits at
+     16.5:1 against the card — so it stays transparent and nothing shifts. */
+  --accent-edge: transparent;
+  /* Control boundaries (inputs), as opposed to decorative card edges. */
+  --border-strong: #2a2a2e;
+  --danger: #ff5a5a;
+  --success: #4ade80;
+}
+
+/*
+ * Light theme — daylight readability, not a redesign.
+ *
+ * Card surfaces stay neutral white so lot photos still dominate, which is why
+ * dark was chosen in the first place. The brand lime survives as a FILL
+ * (near-black ink on it reads at 17.8:1); as text or a thin mark it cannot, so
+ * those use `--accent-text`. Every value here was measured, not eyeballed —
+ * the ratios are recorded in CLAUDE.md.
+ */
+[data-theme="light"] {
+  /* Native controls, scrollbars and autofill follow this, not the palette. */
+  color-scheme: light;
+  --bg: #f4f4f6;
+  --surface: #ffffff;
+  --surface-raised: #ededf1;
+  --border: #d9dae1;
+  --border-strong: #83868f;
+  --text: #16161a;
+  --text-muted: #5c5f6b;
+  --accent: #e8ff5a;
+  --accent-ink: #0a0a0b;
+  --accent-text: #5c6b00;
+  --accent-edge: #5c6b00;
+  --danger: #b42318;
+  --success: #146b33;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-border-strong: var(--border-strong);
+  --color-accent-edge: var(--accent-edge);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
@@ -25,7 +87,7 @@
 
 @keyframes pulse-accent {
   0% {
-    color: var(--color-accent);
+    color: var(--accent-text);
     transform: scale(1);
   }
   25% {
@@ -54,8 +116,8 @@
 
 html,
 body {
-  background-color: var(--color-bg);
-  color: var(--color-text);
+  background-color: var(--bg);
+  color: var(--text);
 }
 
 body {
@@ -72,7 +134,7 @@ body {
 
 /* Visible, high-contrast focus for keyboard users everywhere. */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 

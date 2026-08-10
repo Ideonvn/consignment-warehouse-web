@@ -35,14 +35,14 @@ const TONE_STYLES: Record<ToastTone, string> = {
   neutral: "border-border bg-surface-raised text-text",
   success: "border-success/40 bg-surface-raised text-text",
   danger: "border-danger/50 bg-surface-raised text-text",
-  accent: "border-accent/50 bg-surface-raised text-text",
+  accent: "border-accent-text/50 bg-surface-raised text-text",
 };
 
 const TONE_BAR: Record<ToastTone, string> = {
   neutral: "bg-text-muted",
   success: "bg-success",
   danger: "bg-danger",
-  accent: "bg-accent",
+  accent: "bg-accent-text",
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -111,7 +111,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                       toast.action?.onClick();
                       dismissToast(toast.id);
                     }}
-                    className="mt-2 min-h-11 text-sm font-semibold text-accent underline underline-offset-4"
+                    className="mt-2 min-h-11 text-sm font-semibold text-accent-text underline underline-offset-4"
                   >
                     {toast.action.label}
                   </button>

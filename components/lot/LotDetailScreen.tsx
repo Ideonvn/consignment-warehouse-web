@@ -133,7 +133,7 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
           <p
             key={pulse}
             className={cn(
-              "mt-1 text-4xl font-semibold text-accent",
+              "mt-1 text-4xl font-semibold text-accent-text",
               pulse > 0 && "animate-pulse-accent",
             )}
           >

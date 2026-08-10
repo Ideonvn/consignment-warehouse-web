@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionExpiredError } from "@/lib/api/errors";
 import { SessionBootstrap } from "@/components/auth/SessionBootstrap";
 import { ToastProvider } from "@/components/ui/Toast";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -29,9 +30,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <SessionBootstrap>{children}</SessionBootstrap>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <SessionBootstrap>{children}</SessionBootstrap>
+        </ToastProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
