@@ -36,6 +36,7 @@ import { LotImage } from "@/components/ui/LotImage";
 import { Money } from "@/components/ui/Money";
 import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/utils/cn";
+import { uuid } from "@/lib/utils/uuid";
 
 /**
  * One number: the most you are willing to pay.
@@ -98,7 +99,7 @@ function BidSheetBody({
   const [outcome, setOutcome] = useState<BidOutcome | null>(null);
   // One id per bid intent. A double tap or a network retry reuses it and the
   // backend returns the original result instead of bidding twice.
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [requestId, setRequestId] = useState(() => uuid());
 
   const { submit, inFlight } = useBidSubmit();
 
@@ -154,7 +155,7 @@ function BidSheetBody({
     setMinimumFromServer(fromMinor);
     setTyped(null);
     // A genuinely new intent, so it gets a genuinely new idempotency key.
-    setRequestId(crypto.randomUUID());
+    setRequestId(uuid());
   }
 
   if (outcome?.kind === "leading" || outcome?.kind === "outbid") {

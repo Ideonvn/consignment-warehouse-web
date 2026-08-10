@@ -1,3 +1,5 @@
+import { uuid } from "@/lib/utils/uuid";
+
 const DEVICE_ID_KEY = "cw.device_id";
 const DEVICE_NAME_FALLBACK = "Web browser";
 
@@ -11,7 +13,7 @@ export function getDeviceId(): string {
   const existing = window.localStorage.getItem(DEVICE_ID_KEY);
   if (existing) return existing;
 
-  const id = crypto.randomUUID();
+  const id = uuid();
   window.localStorage.setItem(DEVICE_ID_KEY, id);
   return id;
 }

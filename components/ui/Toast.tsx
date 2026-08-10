@@ -11,6 +11,7 @@ import {
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils/cn";
+import { uuid } from "@/lib/utils/uuid";
 
 export type ToastTone = "neutral" | "success" | "danger" | "accent";
 
@@ -60,7 +61,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback(
     (input: ToastInput) => {
-      const id = crypto.randomUUID();
+      const id = uuid();
       setToasts((current) => [...current.slice(-2), { ...input, id }]);
       timers.current.set(
         id,
