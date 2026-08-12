@@ -58,6 +58,8 @@ export const auctionSchema = z.object({
   max_extensions: z.number(),
   // Declared with a server-side default rather than as required.
   lot_count: z.number().default(0),
+  /** What must be on account before bidding here. 0 means no deposit. */
+  deposit_amount_minor: z.number().default(0),
 });
 
 export const auctionListSchema = z.array(auctionSchema);
@@ -180,6 +182,43 @@ export const swipeSchema = z.object({
   lot_id: z.string(),
   direction: swipeDirectionSchema,
   updated_at: z.string(),
+});
+
+/* -------------------------------------------------------------- account --- */
+
+export const ledgerEntryTypeSchema = z.enum([
+  "deposit",
+  "payment",
+  "lot_won",
+  "buyers_premium",
+  "refund",
+  "adjustment",
+  "reversal",
+]);
+
+export const ledgerEntrySchema = z.object({
+  id: z.string(),
+  entry_type: ledgerEntryTypeSchema,
+  /** Signed: negative is a charge. */
+  amount_minor: z.number(),
+  currency_code: z.string(),
+  description: z.string().nullable(),
+  reference: z.string().nullable(),
+  lot_id: z.string().nullable(),
+  auction_id: z.string().nullable(),
+  created_at: z.string(),
+  /**
+   * The balance as it stood after this entry. Accumulated server-side
+   * oldest-first and continued across pages — render it, never recompute it.
+   */
+  balance_after_minor: z.number(),
+});
+
+export const accountSchema = z.object({
+  /** Signed: negative means the bidder owes money. */
+  balance_minor: z.number(),
+  currency_code: z.string(),
+  entries: z.array(ledgerEntrySchema),
 });
 
 /* ------------------------------------------------------------ realtime --- */

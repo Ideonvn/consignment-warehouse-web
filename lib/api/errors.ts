@@ -38,6 +38,39 @@ export class BidTooLowError extends ApiError {
 }
 
 /**
+ * 403 on a bid: the account is short of this auction's deposit.
+ *
+ * The numbers are typed rather than prose because this is the message that tells
+ * someone HOW to become able to bid. `shortfallMinor` is authoritative and is
+ * NOT `required - balance` — someone who owes money needs the debt cleared *and*
+ * the deposit, and the server accounts for that.
+ */
+export class InsufficientCreditError extends ApiError {
+  readonly requiredMinor: number;
+  readonly balanceMinor: number;
+  readonly shortfallMinor: number;
+  readonly currencyCode: string;
+
+  constructor(
+    message: string,
+    fields: {
+      required_minor: number;
+      balance_minor: number;
+      shortfall_minor: number;
+      currency_code: string;
+    },
+    detail: unknown,
+  ) {
+    super(403, message, detail);
+    this.name = "InsufficientCreditError";
+    this.requiredMinor = fields.required_minor;
+    this.balanceMinor = fields.balance_minor;
+    this.shortfallMinor = fields.shortfall_minor;
+    this.currencyCode = fields.currency_code;
+  }
+}
+
+/**
  * A field can no longer be changed (e.g. once bidding has started). Declared by
  * the backend as `FrozenFieldOut`: `{detail: {message, field}}`. Admin-only in
  * practice, so it should rarely reach this client at all.
@@ -113,6 +146,24 @@ export function toApiError(status: number, body: unknown, retryAfter: number | n
     const minimum = structured.minimum_next_bid_minor;
     if (typeof minimum === "number") {
       return new BidTooLowError(message, minimum, detail);
+    }
+
+    if (
+      typeof structured.shortfall_minor === "number" &&
+      typeof structured.required_minor === "number" &&
+      typeof structured.balance_minor === "number"
+    ) {
+      return new InsufficientCreditError(
+        message,
+        {
+          required_minor: structured.required_minor,
+          balance_minor: structured.balance_minor,
+          shortfall_minor: structured.shortfall_minor,
+          currency_code:
+            typeof structured.currency_code === "string" ? structured.currency_code : "ZAR",
+        },
+        detail,
+      );
     }
 
     if (typeof structured.field === "string") {

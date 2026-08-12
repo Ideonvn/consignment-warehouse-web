@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type {
+  accountSchema,
   auctionSchema,
   auctionStatusSchema,
   bidResultSchema,
@@ -8,6 +9,8 @@ import type {
   lotCardSchema,
   lotDetailSchema,
   lotImageSchema,
+  ledgerEntrySchema,
+  ledgerEntryTypeSchema,
   lotStatusSchema,
   myBidSchema,
   serverMessageSchema,
@@ -43,6 +46,10 @@ export type Bid = z.infer<typeof bidSchema>;
 export type BidStatus = z.infer<typeof bidStatusSchema>;
 export type BidResult = z.infer<typeof bidResultSchema>;
 export type MyBid = z.infer<typeof myBidSchema>;
+
+export type Account = z.infer<typeof accountSchema>;
+export type LedgerEntry = z.infer<typeof ledgerEntrySchema>;
+export type LedgerEntryType = z.infer<typeof ledgerEntryTypeSchema>;
 
 export type WsTicket = z.infer<typeof wsTicketSchema>;
 export type ServerMessage = z.infer<typeof serverMessageSchema>;

@@ -1,5 +1,6 @@
 import { apiGet, apiRequest, type ApiResult } from "@/lib/api/client";
 import {
+  accountSchema,
   auctionListSchema,
   auctionSchema,
   bidListSchema,
@@ -14,6 +15,7 @@ import {
   wsTicketSchema,
 } from "@/lib/api/schemas";
 import type {
+  Account,
   Auction,
   AuctionStatus,
   Bid,
@@ -177,6 +179,15 @@ export function listMyBids(
   params: { active_only?: boolean; limit?: number } = {},
 ): Promise<MyBid[]> {
   return apiGet("/me/bids", { schema: myBidListSchema, query: params });
+}
+
+/* -------------------------------------------------------------- account --- */
+
+/** The caller's own statement. There is no route to anyone else's. */
+export function getMyAccount(
+  params: { limit?: number; offset?: number } = {},
+): Promise<ApiResult<Account>> {
+  return apiRequest("/me/account", { schema: accountSchema, query: params });
 }
 
 /* ------------------------------------------------------------ realtime --- */

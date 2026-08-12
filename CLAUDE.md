@@ -154,6 +154,47 @@ and autofill follow. `viewport.themeColor` can only vary by media query, which f
 explicit Light choice on a dark OS keeps a black status bar. The theme change is deliberately not
 animated: a whole-page cross-fade is jarring and costly.
 
+## Bidder accounts
+
+Every bidder has **one running balance**, not a wallet per auction. Positive means credit, negative
+means they owe. A deposit or a payment adds credit; winning a lot subtracts. R10 000 deposited then
+R12 000 won leaves them at **−R2 000** — they owe R2 000, or they can pay the R12 000 and keep the
+R10 000 on account for the next auction. Standing credit makes someone eligible for the next
+auction automatically, with no action by anyone.
+
+Each auction carries `deposit_amount_minor` — what must be on account before bidding *in that
+auction*. `GET /me/account` returns the caller's own statement, paginated, and there is no route to
+anyone else's.
+
+**Browsing is deliberately ungated.** The auction list, the card stack, swiping in *both*
+directions, lot detail and bid history all work with no deposit and no credit. The gate is only on
+placing a bid. Do not add a gate, a blur or a nag anywhere else: someone has to be able to explore a
+whole auction and then decide it is worth putting money down. The deposit requirement is shown on
+the auction card as information, never as a barrier.
+
+**Eligibility is the server's decision.** Show the requirement, but never compute eligibility
+client-side as the source of truth — always handle the 403. It arrives typed
+(`InsufficientCreditError`) with `required_minor`, `balance_minor`, `shortfall_minor` and
+`currency_code`.
+
+**Render `shortfall_minor`; never compute `required − balance`.** It is not clamped to the deposit:
+someone who owes R250 against a R10 000 deposit needs R10 250, and the server says so. Computing it
+locally quietly under-quotes anyone in debt.
+
+**A negative balance is an invoice, not an error state.** These are customers who have just won
+something. `lib/format/account.ts` turns the signed number into plain language ("R2 000 due" /
+"R2 000 on account") because "−200000" is not usable. It also maps `entry_type` to human labels —
+`lot_won` is "Lot won", `buyers_premium` is "Buyer's premium", `reversal` is "Correction".
+
+**A `reversal` is shown as its own line and never netted against the entry it corrects.** The
+statement is a history; an entry that silently vanishes is worse than one that is explained. The
+same goes for `balance_after_minor` — the server accumulates it oldest-first and continues it across
+pages, so it is rendered exactly as given, never recomputed.
+
+**How to pay comes from config** (`lib/config/payments.ts`, `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS`).
+Payment is arranged manually with the operator today; there is no payment flow in the product. The
+fallback is an honest "contact the warehouse" line rather than invented bank details.
+
 ## Structure
 
 - `app/` — routes. `(app)/` is everything behind the sign-in wall (guard, bottom nav, realtime

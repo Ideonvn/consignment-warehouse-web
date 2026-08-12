@@ -35,6 +35,8 @@ import { Countdown } from "@/components/ui/Countdown";
 import { LotImage } from "@/components/ui/LotImage";
 import { Money } from "@/components/ui/Money";
 import { Sheet } from "@/components/ui/Sheet";
+import { PAYMENT_INSTRUCTIONS } from "@/lib/config/payments";
+import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 import { uuid } from "@/lib/utils/uuid";
 
@@ -167,6 +169,10 @@ function BidSheetBody({
         onRaise={() => startNewBid(outcome.result.minimum_next_bid_minor)}
       />
     );
+  }
+
+  if (outcome?.kind === "insufficient-credit") {
+    return <ShortfallPanel outcome={outcome} onClose={onClose} />;
   }
 
   if (closed) {
@@ -306,6 +312,69 @@ function BidSheetBody({
       >
         Not now
       </button>
+    </div>
+  );
+}
+
+/**
+ * The refusal. It has to say what they have, what this auction needs and what to
+ * add — "you are not eligible" tells someone nothing they can act on.
+ */
+function ShortfallPanel({
+  outcome,
+  onClose,
+}: {
+  outcome: Extract<BidOutcome, { kind: "insufficient-credit" }>;
+  onClose: () => void;
+}) {
+  const currency = outcome.currencyCode;
+  const owes = outcome.balanceMinor < 0;
+
+  return (
+    <div className="px-5 pt-2 pb-6">
+      <p className="text-xl font-semibold">A deposit is needed to bid here</p>
+
+      <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-border bg-surface-raised p-4 text-sm">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-text-muted">You have</span>
+          <span className={cn("font-semibold", owes ? "text-danger" : "text-text")}>
+            <Money minor={Math.abs(outcome.balanceMinor)} currency={currency} />
+            {owes ? " due" : " on account"}
+          </span>
+        </p>
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-text-muted">This auction needs</span>
+          <span className="font-semibold text-text">
+            <Money minor={outcome.requiredMinor} currency={currency} />
+          </span>
+        </p>
+        <p className="mt-1 flex items-baseline justify-between gap-3 border-t border-border pt-3">
+          <span className="font-medium">Add</span>
+          {/* Server-computed: someone who owes needs the debt cleared as well as
+              the deposit, so this is never `required - balance`. */}
+          <span className="text-lg font-semibold text-accent-text">
+            <Money minor={outcome.shortfallMinor} currency={currency} />
+          </span>
+        </p>
+      </div>
+
+      <p className="mt-3 text-sm text-text-muted">{PAYMENT_INSTRUCTIONS}</p>
+
+      <div className="mt-6 flex flex-col gap-2">
+        <Link
+          href="/account"
+          className="inline-flex min-h-14 w-full items-center justify-center rounded-full border border-accent-edge bg-accent px-5 font-semibold text-accent-ink"
+        >
+          See my account
+        </Link>
+        <Button variant="secondary" size="lg" fullWidth onClick={onClose}>
+          Not now
+        </Button>
+      </div>
+
+      <p className="mt-4 text-center text-xs text-text-muted">
+        Nothing was bid. You can keep browsing and swiping in the meantime.
+      </p>
     </div>
   );
 }

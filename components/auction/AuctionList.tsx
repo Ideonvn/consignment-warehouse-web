@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { listAuctions } from "@/lib/api/endpoints";
+import { getMyAccount, listAuctions } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
 import type { Auction } from "@/types/api";
 import { Countdown } from "@/components/ui/Countdown";
+import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LotImage } from "@/components/ui/LotImage";
@@ -31,6 +32,14 @@ export function AuctionList() {
     queryKey: queryKeys.auctions(),
     queryFn: () => listAuctions({ limit: 50 }),
   });
+
+  // Shown as guidance only — the server decides eligibility, and a bid refusal
+  // carries the authoritative numbers. Browsing is never gated on this.
+  const { data: account } = useQuery({
+    queryKey: ["account", "summary"],
+    queryFn: () => getMyAccount({ limit: 1, offset: 0 }),
+  });
+  const balanceMinor = account?.data.balance_minor ?? null;
 
   const auctions = [...(data ?? [])].sort(
     (a, b) =>
@@ -60,7 +69,7 @@ export function AuctionList() {
         <ul className="flex flex-col gap-4">
           {auctions.map((auction) => (
             <li key={auction.id}>
-              <AuctionCard auction={auction} />
+              <AuctionCard auction={auction} balanceMinor={balanceMinor} />
             </li>
           ))}
         </ul>
@@ -69,7 +78,13 @@ export function AuctionList() {
   );
 }
 
-function AuctionCard({ auction }: { auction: Auction }) {
+function AuctionCard({
+  auction,
+  balanceMinor,
+}: {
+  auction: Auction;
+  balanceMinor: number | null;
+}) {
   const isLive = auction.status === "live";
   const isScheduled = auction.status === "scheduled";
   const enterable = isLive || auction.status === "ended" || auction.status === "settled";
@@ -97,6 +112,8 @@ function AuctionCard({ auction }: { auction: Auction }) {
         {auction.description ? (
           <p className="mt-1 line-clamp-2 text-sm text-text-muted">{auction.description}</p>
         ) : null}
+
+        <DepositNote auction={auction} balanceMinor={balanceMinor} />
 
         <div className="mt-3 flex items-center justify-between text-sm">
           <span className="flex items-center gap-2 text-text-muted">
@@ -130,5 +147,44 @@ function AuctionCard({ auction }: { auction: Auction }) {
     <Link href={`/auctions/${auction.id}`} className="block rounded-card">
       {body}
     </Link>
+  );
+}
+
+/**
+ * What this auction asks for before bidding, said before anyone commits to
+ * anything. Reassurance when it is already covered costs nothing.
+ */
+function DepositNote({
+  auction,
+  balanceMinor,
+}: {
+  auction: Auction;
+  balanceMinor: number | null;
+}) {
+  if (auction.deposit_amount_minor <= 0) return null;
+  if (auction.status !== "live" && auction.status !== "scheduled") return null;
+
+  const covered = balanceMinor !== null && balanceMinor >= auction.deposit_amount_minor;
+
+  return (
+    <p className="mt-2 text-xs text-text-muted">
+      {covered ? (
+        <>
+          <span className="text-success">Deposit covered</span> — your account has the{" "}
+          <Money minor={auction.deposit_amount_minor} currency={auction.currency_code} /> this
+          auction needs.
+        </>
+      ) : (
+        <>
+          Bidding needs{" "}
+          <Money
+            minor={auction.deposit_amount_minor}
+            currency={auction.currency_code}
+            className="text-text"
+          />{" "}
+          on account. Browsing is free.
+        </>
+      )}
+    </p>
   );
 }

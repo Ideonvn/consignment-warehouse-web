@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { placeBid, setAutoBid } from "@/lib/api/endpoints";
 import { applyBidResult } from "@/lib/api/cache";
-import { ApiError, BidTooLowError } from "@/lib/api/errors";
+import { ApiError, BidTooLowError, InsufficientCreditError } from "@/lib/api/errors";
 import type { BidResult } from "@/types/api";
 
 export type BidOutcome =
@@ -14,6 +14,15 @@ export type BidOutcome =
   | { kind: "outbid"; result: BidResult }
   /** Someone bid between render and submit; retry from the new minimum. */
   | { kind: "too-low"; minimumNextBidMinor: number }
+  /** Not enough on account for this auction's deposit. */
+  | {
+      kind: "insufficient-credit";
+      message: string;
+      requiredMinor: number;
+      balanceMinor: number;
+      shortfallMinor: number;
+      currencyCode: string;
+    }
   | { kind: "closed" }
   | { kind: "error"; message: string; retryAfter: number | null };
 
@@ -53,6 +62,16 @@ export function useBidSubmit() {
       } catch (cause) {
         if (cause instanceof BidTooLowError) {
           return { kind: "too-low", minimumNextBidMinor: cause.minimumNextBidMinor };
+        }
+        if (cause instanceof InsufficientCreditError) {
+          return {
+            kind: "insufficient-credit",
+            message: cause.message,
+            requiredMinor: cause.requiredMinor,
+            balanceMinor: cause.balanceMinor,
+            shortfallMinor: cause.shortfallMinor,
+            currencyCode: cause.currencyCode,
+          };
         }
         if (cause instanceof ApiError && cause.status === 409) {
           return { kind: "closed" };

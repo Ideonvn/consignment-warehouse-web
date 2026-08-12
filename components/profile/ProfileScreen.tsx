@@ -13,6 +13,7 @@ import { PhoneColumn } from "@/components/layout/PhoneColumn";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
 import { ThemeSetting } from "@/components/theme/ThemeSetting";
+import { AccountSummaryLink } from "@/components/account/AccountSummaryLink";
 
 export function ProfileScreen() {
   const router = useRouter();
@@ -93,6 +94,10 @@ export function ProfileScreen() {
         <Button onClick={save} loading={saving} fullWidth>
           Save changes
         </Button>
+      </div>
+
+      <div className="mt-6">
+        <AccountSummaryLink />
       </div>
 
       <div className="mt-6">

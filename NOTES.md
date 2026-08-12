@@ -47,6 +47,31 @@ Judgement calls, backend requests, deferrals, and the final journey result.
   the HttpOnly refresh cookie flows; the backend must keep `Access-Control-Allow-Credentials: true`
   with a non-wildcard origin. (It does today.)
 
+## Bidder accounts and deposits
+
+- **Payment instructions are a config string, not a payment flow.**
+  `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS` (see `lib/config/payments.ts`, documented in `.env.example`)
+  is shown on the statement and in the bid refusal. Payment is arranged manually with the operator
+  today, so the fallback is an honest "contact the warehouse to pay in or top up" line rather than
+  invented bank details or a fake button. Set the env var to the real wording — bank details, a
+  WhatsApp number, whatever the operator wants — without a code change.
+- **The deposit note on an auction card is guidance, not a gate.** It needs the balance, so the
+  auction list fetches `/me/account` with `limit=1` (the smallest page that still returns the
+  balance) and shares the cache entry with the Profile summary. If that call fails the card simply
+  states the requirement without the "covered" reassurance; nothing is blocked either way, because
+  the server decides eligibility and the 403 carries the real numbers.
+- **The refusal lives in `BidSheet`**, which is the single component behind the card stack, the
+  raise from My bids and the raise from lot detail — so all three paths get the same screen.
+- **`shortfall_minor` is rendered verbatim.** Verified against a bidder owing R250 with a R10 000
+  deposit: the panel says "Add R10 250", not R10 000.
+- **Backend nit:** a reversal's auto-generated description leaks the internal type name — it reads
+  "Reversal of lot_won: …". Harmless but visible to customers on the statement; "Reversal of lot
+  won" would read better. The `entry_type` field itself is mapped to a human label client-side.
+- **Not wired:** winning a lot posts `lot_won` to the ledger, but nothing invalidates the account
+  query when a lot closes, so a statement left open in another tab will not update until it is
+  refetched (10s stale time, so effectively on next visit). Left alone deliberately — the statement
+  is not a live screen and adding socket wiring for it would be speculative.
+
 ## Known gaps
 
 Accepted, not outstanding — deliberately not being chased.
