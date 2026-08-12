@@ -64,9 +64,6 @@ Judgement calls, backend requests, deferrals, and the final journey result.
   raise from My bids and the raise from lot detail — so all three paths get the same screen.
 - **`shortfall_minor` is rendered verbatim.** Verified against a bidder owing R250 with a R10 000
   deposit: the panel says "Add R10 250", not R10 000.
-- **Backend nit:** a reversal's auto-generated description leaks the internal type name — it reads
-  "Reversal of lot_won: …". Harmless but visible to customers on the statement; "Reversal of lot
-  won" would read better. The `entry_type` field itself is mapped to a human label client-side.
 - **Not wired:** winning a lot posts `lot_won` to the ledger, but nothing invalidates the account
   query when a lot closes, so a statement left open in another tab will not update until it is
   refetched (10s stale time, so effectively on next visit). Left alone deliberately — the statement
@@ -104,6 +101,32 @@ justified are gone:
 - **`lot_rescheduled`** is fully specified and carries `scheduled_ends_at`, `effective_ends_at` and
   `extension_count`. It is applied as an absolute value, so an admin pulling a close time *earlier*
   shortens the countdown — unlike `lot_extended`, which only ever moves later.
+
+## Resolved on the backend
+
+Both of these were reported from here and have since been fixed upstream. Recorded so nobody
+re-raises them, and because the second one has a lesson attached.
+
+- **Reversal descriptions no longer leak the internal type name.** They used to read
+  "Reversal of lot_won: …" on a customer-facing statement. Ledger entries now build the description
+  through a customer-facing label map, so it reads "Reversal of Lot won: …", and a test asserts no
+  entry type's label contains an underscore. The client still maps `entry_type` to its own label
+  for the row heading (`lib/format/account.ts`) — that stays, because the heading and the
+  description are separate strings.
+- **`AuctionCreateIn` now persists `deposit_amount_minor` and `buyers_premium_bps`.** The create
+  endpoint builds from the payload's own fields, and a contract test asserts every field on the
+  create schema round-trips to the database — driven from the schema itself, so a new field cannot
+  go missing the same way.
+
+  **Worth keeping in mind:** while this was broken it cost real time here, and not by failing
+  loudly. Creating an auction with `deposit_amount_minor: 5000000` silently stored `0`, so a
+  deposit-gate test "passed" a bid that should have been refused — a **false negative** that looked
+  like working software. It was only caught by reading the auction back and finding the field at
+  zero. When a test of a gate passes on the first try, confirm the gate was actually armed; the
+  cheap version is to read the fixture back rather than trusting the write. Note also that the
+  matching `PATCH` is refused once bidding has started (`deposit_amount_minor cannot be changed
+  once bidding has started`), so an auction created before this fix can only be corrected while it
+  still has no bids.
 
 ## Resolved — not a backend bug
 
