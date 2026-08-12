@@ -51,12 +51,14 @@ export function BiddingList() {
 
   const now = useNow();
 
-  // The 200-lot cap is far above any realistic "my bids" list.
+  // Every lot the user has bid on, *including closed ones*. A closed lot is not
+  // finished changing: accepting a reserve flips `ended_reserve_not_met` to
+  // `ended_sold` and publishes another `lot_closed`. Filtering to open lots here
+  // made the client unsubscribe the moment a lot closed, so the one update the
+  // user is actually waiting for — did I win? — never arrived.
   // `MyBid` carries no `bid_sequence`, so these subscribe without a resume
   // point; the lot and stack screens supply one when they have it.
-  useLotSubscription(
-    (data ?? []).filter((row) => row.is_open).map((row) => ({ id: row.lot_id })),
-  );
+  useLotSubscription((data ?? []).map((row) => ({ id: row.lot_id })));
 
   const currencyFor = (auctionId: string) =>
     auctions?.find((auction) => auction.id === auctionId)?.currency_code ?? "ZAR";

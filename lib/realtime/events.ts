@@ -116,6 +116,10 @@ export function applyServerMessage(
         current_bid_minor: message.current_bid_minor,
         is_open: false,
       });
+      // The event carries the outcome but not whether *this* user won it, and a
+      // reserve being accepted turns a lost lot into a won one. Refresh the lot
+      // so `am_i_leading` is authoritative wherever it is being displayed.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lot(message.lot_id) });
       void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
       return;
     }

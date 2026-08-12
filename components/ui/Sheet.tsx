@@ -27,9 +27,25 @@ export function Sheet({ open, onClose, title, hideTitle, children, className }: 
   const titleId = useId();
   const reduceMotion = useReducedMotion();
 
+  /*
+   * The "latest callback" pattern. Callers pass an inline arrow — which is
+   * ordinary React — so `onClose` is a new identity on every parent render. With
+   * it in the dependency list this effect re-ran on every render of the parent:
+   * each run scheduled another focus() and each cleanup restored focus, so on
+   * My bids (which re-renders every second from the countdown ticker) the mobile
+   * keyboard closed and reopened continuously. Holding it in a ref keeps the
+   * handler current while the effect depends only on `open`.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
+    // Captured only on the transition to open. Re-capturing on a later run would
+    // record an element *inside* the sheet and restore focus to the wrong place.
     restoreFocusTo.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -43,7 +59,7 @@ export function Sheet({ open, onClose, title, hideTitle, children, className }: 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !panelRef.current) return;
@@ -71,7 +87,7 @@ export function Sheet({ open, onClose, title, hideTitle, children, className }: 
       document.body.style.overflow = previousOverflow;
       restoreFocusTo.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -102,7 +118,7 @@ export function Sheet({ open, onClose, title, hideTitle, children, className }: 
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.4 }}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 700) onClose();
+              if (info.offset.y > 120 || info.velocity.y > 700) onCloseRef.current();
             }}
             className={cn(
               "relative flex max-h-[92dvh] w-full max-w-(--app-width) flex-col overflow-hidden rounded-t-3xl border-t border-border bg-surface",
