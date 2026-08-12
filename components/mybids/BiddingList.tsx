@@ -56,9 +56,13 @@ export function BiddingList() {
   // `ended_sold` and publishes another `lot_closed`. Filtering to open lots here
   // made the client unsubscribe the moment a lot closed, so the one update the
   // user is actually waiting for — did I win? — never arrived.
-  // `MyBid` carries no `bid_sequence`, so these subscribe without a resume
-  // point; the lot and stack screens supply one when they have it.
-  useLotSubscription((data ?? []).map((row) => ({ id: row.lot_id })));
+  //
+  // Passing each row's `bid_sequence` gives the reconnect a real resume point,
+  // so a lot the user has never opened in detail replays exactly what it missed
+  // instead of resuming from zero and being told `resync_too_far`.
+  useLotSubscription(
+    (data ?? []).map((row) => ({ id: row.lot_id, sequence: row.bid_sequence })),
+  );
 
   const currencyFor = (auctionId: string) =>
     auctions?.find((auction) => auction.id === auctionId)?.currency_code ?? "ZAR";

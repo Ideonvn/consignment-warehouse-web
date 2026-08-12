@@ -162,6 +162,8 @@ export const myBidSchema = z.object({
   status: lotStatusSchema,
   current_bid_minor: z.number().nullable(),
   minimum_next_bid_minor: z.number(),
+  /** The resume point for a reconnect — see `useLotSubscription`. */
+  bid_sequence: z.number(),
   effective_ends_at: z.string(),
   primary_image_url: z.string().nullable(),
   my_max_minor: z.number().nullable(),
