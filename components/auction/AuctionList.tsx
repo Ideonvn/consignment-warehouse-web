@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMyAccount, listAuctions } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
+import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import type { Auction } from "@/types/api";
 import { Countdown } from "@/components/ui/Countdown";
 import { Money } from "@/components/ui/Money";
@@ -27,10 +28,21 @@ const ORDER: Record<Auction["status"], number> = {
 };
 
 export function AuctionList() {
+  const queryClient = useQueryClient();
   const firstName = useSession((state) => state.user?.first_name);
   const { data, isPending, error, refetch } = useQuery({
     queryKey: queryKeys.auctions(),
     queryFn: () => listAuctions({ limit: 50 }),
+  });
+
+  // The soonest auction to open or close drives when this list re-asks, so a
+  // card never sits on "Opening…" waiting for someone to reload.
+  const soonestBoundary = (data ?? [])
+    .map((auction) => auctionDueAt(auction))
+    .filter((due): due is string => due !== null)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  useDueRefresh(soonestBoundary, () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.auctions() });
   });
 
   // Shown as guidance only — the server decides eligibility, and a bid refusal
@@ -87,7 +99,11 @@ function AuctionCard({
 }) {
   const isLive = auction.status === "live";
   const isScheduled = auction.status === "scheduled";
-  const enterable = isLive || auction.status === "ended" || auction.status === "settled";
+  // Published means viewable. Someone should be able to walk an auction before
+  // it opens and decide whether it is worth putting a deposit down; the backend
+  // serves lots for any non-draft auction and refuses bids on scheduled lots.
+  const enterable =
+    isLive || isScheduled || auction.status === "ended" || auction.status === "settled";
 
   const body = (
     <article className="overflow-hidden rounded-card border border-border bg-surface">
@@ -131,7 +147,7 @@ function AuctionCard({
           </span>
           {enterable ? (
             <span className="font-semibold text-accent-text">
-              {isLive ? "Enter stack →" : "View lots →"}
+              {isLive ? "Enter stack →" : isScheduled ? "Preview lots →" : "View lots →"}
             </span>
           ) : null}
         </div>

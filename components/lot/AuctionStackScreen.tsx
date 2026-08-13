@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAuction } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
+import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import { CardStack } from "@/components/lot/CardStack";
 import { Countdown } from "@/components/ui/Countdown";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -11,9 +12,17 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
 
 export function AuctionStackScreen({ auctionId }: { auctionId: string }) {
+  const queryClient = useQueryClient();
   const { data: auction, isPending, error, refetch } = useQuery({
     queryKey: queryKeys.auction(auctionId),
     queryFn: () => getAuction(auctionId),
+  });
+
+  // Entering before the open is allowed, so this screen has to notice the moment
+  // bidding actually opens — without being reloaded.
+  useDueRefresh(auctionDueAt(auction), () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.auction(auctionId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.lots(auctionId) });
   });
 
   if (error) {
@@ -41,6 +50,10 @@ export function AuctionStackScreen({ auctionId }: { auctionId: string }) {
               <StatusPill tone="live" pulse>
                 <Countdown endsAt={auction.ends_at} />
               </StatusPill>
+            ) : auction.status === "scheduled" ? (
+              <StatusPill>
+                <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
+              </StatusPill>
             ) : (
               <StatusPill>Ended</StatusPill>
             )}
@@ -49,7 +62,12 @@ export function AuctionStackScreen({ auctionId }: { auctionId: string }) {
       </div>
 
       {auction ? (
-        <CardStack auctionId={auctionId} currency={auction.currency_code} />
+        <CardStack
+          auctionId={auctionId}
+          currency={auction.currency_code}
+          biddingOpen={auction.status === "live"}
+          opensAt={auction.status === "scheduled" ? auction.starts_at : undefined}
+        />
       ) : (
         <div className="mx-auto w-full max-w-(--app-width) px-4">
           <Skeleton className="h-[min(68dvh,34rem)] w-full rounded-card" />

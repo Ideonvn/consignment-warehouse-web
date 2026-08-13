@@ -83,6 +83,15 @@ later bid looks like a fresh gap, asks for a resync, gets refused again, and thr
 of the page while looking perfectly correct on screen. Replayed duplicates are dropped by sequence
 as a safety net; keep it.
 
+**A countdown reaching zero must trigger a refetch, not sit at zero.** Expiry changes what the
+user may do, but the status that says so is written by the lifecycle worker on its next tick — so
+from that moment client and server disagree and only the client knows to resolve it. `useDueRefresh`
+schedules a timer for the boundary itself and retries every 5s until the value it was given changes.
+Do **not** reach for React Query's `refetchInterval` here: it is only recomputed when the component
+re-renders, and these screens don't re-render on the tick — their `Countdown` children do — so the
+interval stays at whatever it was when the data arrived, which is "never poll". That mistake is why
+an auction used to sit on "Opening…" until someone reloaded.
+
 **`lot_rescheduled` can move a clock EARLIER.** Unlike `lot_extended` (anti-snipe, later only), an
 admin moving the auction's `ends_at` cascades in either direction. Apply the value absolutely; a
 countdown that only ever grows is wrong here.
@@ -93,6 +102,24 @@ may see. `reserve_price_minor` is admin-only and must not be requested, stored o
 **Never compute `minimum_next_bid_minor` yourself.** It is price-banded and configurable per auction
 and per lot — server-owned. Read it from the lot, from the bid response, or from the 422 that tells
 you someone bid first.
+
+## The three gestures, and the win
+
+Left is pass and right is bid — both recorded through `PUT /swipe`, both recoverable from My bids.
+**Up is skip, and it is deliberately not remembered**: no request, nothing persisted, the card moves
+to the back of the current stack and is back on the next load. It exists so someone can move past a
+lot without acquiring another list to manage. Do not "improve" it by saving it. It needs a longer,
+faster pull than left/right because it shares an axis with page scrolling, and the card sets
+`touch-none` so the browser cannot claim the gesture first.
+
+Every gesture has three ways in: the drag, a button, and an arrow key (←, →, ↑).
+
+**Winning is announced once, properly.** A win is a `/me/bids` row that has ended with the user
+still leading. Which wins have been celebrated lives in `localStorage` (`cw.wins_seen`) — it is
+presentation state, and the cost of being wrong is one repeated announcement, not a lost record.
+The modal is app-wide so it lands wherever the user is, fires live off the closing time (socket
+events only reach lots the current screen subscribes to), and always answers "what now": the lots
+won with prices, the balance, the payment reference and how to collect.
 
 ## Theming
 
@@ -172,6 +199,11 @@ placing a bid. Do not add a gate, a blur or a nag anywhere else: someone has to 
 whole auction and then decide it is worth putting money down. The deposit requirement is shown on
 the auction card as information, never as a barrier.
 
+**A published auction is viewable before it opens.** Scheduled auctions are enterable: someone can
+walk the lots and swipe, and swiping right still saves interest — it just cannot open the bid sheet,
+because bidding is not open. Say when it opens rather than showing a dead button. Only `draft` is
+hidden, and that is the backend's doing.
+
 **Eligibility is the server's decision.** Show the requirement, but never compute eligibility
 client-side as the source of truth — always handle the 403. It arrives typed
 (`InsufficientCreditError`) with `required_minor`, `balance_minor`, `shortfall_minor` and
@@ -190,6 +222,11 @@ something. `lib/format/account.ts` turns the signed number into plain language (
 statement is a history; an entry that silently vanishes is worse than one that is explained. The
 same goes for `balance_after_minor` — the server accumulates it oldest-first and continues it across
 pages, so it is rendered exactly as given, never recomputed.
+
+**The payment reference travels with every request for money.** `GET /auth/me` carries
+`payment_reference`; `components/account/PaymentDetails.tsx` is the single block that pairs it with
+the instructions, used on the statement, the bid refusal and the win modal. A payment without a
+reference is one the operator has to chase.
 
 **How to pay comes from config** (`lib/config/payments.ts`, `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS`).
 Payment is arranged manually with the operator today; there is no payment flow in the product. The

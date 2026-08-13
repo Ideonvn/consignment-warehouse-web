@@ -35,8 +35,8 @@ import { Countdown } from "@/components/ui/Countdown";
 import { LotImage } from "@/components/ui/LotImage";
 import { Money } from "@/components/ui/Money";
 import { Sheet } from "@/components/ui/Sheet";
-import { PAYMENT_INSTRUCTIONS } from "@/lib/config/payments";
 import Link from "next/link";
+import { PaymentDetails } from "@/components/account/PaymentDetails";
 import { cn } from "@/lib/utils/cn";
 import { uuid } from "@/lib/utils/uuid";
 
@@ -358,7 +358,7 @@ function ShortfallPanel({
         </p>
       </div>
 
-      <p className="mt-3 text-sm text-text-muted">{PAYMENT_INSTRUCTIONS}</p>
+      <PaymentDetails className="mt-3" />
 
       <div className="mt-6 flex flex-col gap-2">
         <Link

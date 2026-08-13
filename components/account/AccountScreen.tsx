@@ -4,7 +4,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { getMyAccount } from "@/lib/api/endpoints";
 import { describeBalance, entryLabel } from "@/lib/format/account";
 import { formatDateTime } from "@/lib/format/time";
-import { PAYMENT_INSTRUCTIONS } from "@/lib/config/payments";
 import type { LedgerEntry } from "@/types/api";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,6 +11,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Money } from "@/components/ui/Money";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PhoneColumn } from "@/components/layout/PhoneColumn";
+import { PaymentDetails } from "@/components/account/PaymentDetails";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { cn } from "@/lib/utils/cn";
 
@@ -77,9 +77,7 @@ export function AccountScreen() {
         <p className="mt-2 text-sm text-text-muted">{standing.detail}</p>
       </section>
 
-      <p className="mt-3 rounded-2xl border border-border bg-surface-raised p-3 text-xs text-text-muted">
-        {PAYMENT_INSTRUCTIONS}
-      </p>
+      <PaymentDetails className="mt-3" />
 
       <h2 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-text-muted uppercase">
         Statement

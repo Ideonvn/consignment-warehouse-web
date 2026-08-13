@@ -14,6 +14,8 @@ export const userSchema = z.object({
   first_name: z.string().nullable(),
   last_name: z.string().nullable(),
   email: z.string().nullable(),
+  /** What the bidder quotes when paying. Shown wherever we ask them to pay. */
+  payment_reference: z.string().nullable(),
   status: z.enum(["active", "suspended", "deleted"]),
   role: z.enum(["bidder", "admin", "superadmin"]),
   is_phone_verified: z.boolean(),

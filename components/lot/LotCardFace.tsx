@@ -47,7 +47,9 @@ export function LotCardFace({
 
         <div className="absolute top-3 right-3 left-3 flex items-start justify-between gap-2">
           <StatusPill>Lot {lot.lot_number}</StatusPill>
-          {outcome ? (
+          {lot.status === "scheduled" ? (
+            <StatusPill>Not open yet</StatusPill>
+          ) : outcome ? (
             <StatusPill tone={outcome.tone}>{outcome.label}</StatusPill>
           ) : (
             <StatusPill tone={hasBids ? "live" : "muted"} pulse={hasBids}>

@@ -29,8 +29,12 @@ Judgement calls, backend requests, deferrals, and the final journey result.
 - **The pending phone number in the OTP flow lives in a store, not the URL.** Refreshing
   `/login/verify` sends the user back to `/login` rather than leaving a phone number in history.
   The *intended destination* does travel in `?next=`, because it must survive a reload.
-- **Auction cards are enterable when live or ended, not when scheduled.** Ended auctions still let
-  people look at what things went for; a scheduled auction shows a countdown to opening instead.
+- **Auction cards are enterable when live, scheduled or ended.** *Reversed.* This originally
+  excluded scheduled auctions, on the reasoning that there is nothing to do in one yet. That was
+  wrong: the decision a bidder makes before an auction opens is whether it is worth putting a
+  deposit down, and they cannot make it without seeing the lots. Published now means viewable —
+  browse and swipe, with saving-as-interested still working; only the bid sheet is withheld, and the
+  screen says when bidding opens. Only `draft` stays hidden, which the backend enforces anyway.
 - **The stack subscribes to the visible cards plus the next few (8), not the whole page.** My Bids
   subscribes to every open lot the user has money on — far below the 200-lot cap either way.
 - **Lot pages have static metadata.** Per-lot titles would need a server-side fetch, but the access
@@ -68,6 +72,30 @@ Judgement calls, backend requests, deferrals, and the final journey result.
   query when a lot closes, so a statement left open in another tab will not update until it is
   refetched (10s stale time, so effectively on next visit). Left alone deliberately — the statement
   is not a live screen and adding socket wiring for it would be speculative.
+
+## Countdowns, gestures and the win
+
+- **`refetchInterval` is the wrong tool for "act when this countdown expires", and it looked
+  right.** The first implementation polled via `refetchInterval: (query) => overdue ? 5000 : false`.
+  It never fired once: React Query only recomputes that callback when the component re-renders, and
+  these screens do not re-render on the tick — their `Countdown` children do. So the interval was
+  computed once, when the data arrived and nothing was overdue, and stayed `false`. Caught by
+  watching the network during a real opening: zero requests while the page sat on "Opening…" and the
+  server had already flipped the auction to live. Replaced by `useDueRefresh`, which schedules a
+  timer for the boundary itself and retries every 5s until the value changes. Verified: requests at
+  the opening second and one retry, then silence — no per-second polling.
+- **The win check is time-triggered, not socket-triggered.** Socket events only arrive for lots the
+  current screen subscribes to, so a win on an auction the user is not looking at would arrive
+  nowhere. `useNewWins` watches the soonest closing time among their own bids and re-asks then, which
+  is why the modal appears wherever they happen to be.
+- **Skip is local by design.** No request, nothing persisted, gone on reload — so nothing
+  accumulates that the user then has to manage, and it never interacts with Interested or Passed.
+  If it ever needs to survive a reload, that is a product decision, not a bug.
+- **Wins seen are tracked per-device in `localStorage`** (`cw.wins_seen`, capped at 200 ids). No
+  backend field: it is presentation state, and the failure mode is one repeated celebration rather
+  than a lost record. Clearing site data will re-announce old wins.
+- **`payment_reference` is shown wherever money is requested** — statement, bid refusal, win modal —
+  through a single `PaymentDetails` block, so the wording and the reference cannot drift apart.
 
 ## Known gaps
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteSwipe, listLots, setSwipe } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
+import { soonestLotDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import type { LotCard, SwipeDirection } from "@/types/api";
 
 const PAGE_SIZE = 20;
@@ -21,6 +22,12 @@ export type LotStack = {
   canUndo: boolean;
   /** Records the swipe and advances the stack. Rolls back if the server refuses. */
   decide: (lot: LotCard, direction: SwipeDirection) => Promise<void>;
+  /**
+   * Move a lot to the back of the stack without deciding anything. Deliberately
+   * local: nothing is sent, nothing is stored, and it is gone on reload — a skip
+   * is "not now", not a preference the user then has to manage.
+   */
+  skip: (lot: LotCard) => void;
   undo: () => Promise<LotCard | null>;
   refetch: () => void;
 };
@@ -36,6 +43,8 @@ export function useLotStack(
 ): LotStack {
   const queryClient = useQueryClient();
   const [resolved, setResolved] = useState<Decision[]>([]);
+  /** Lot ids pushed to the back, in the order they were skipped. Never persisted. */
+  const [skipped, setSkipped] = useState<string[]>([]);
 
   const query = useInfiniteQuery({
     queryKey: queryKeys.lots(auctionId),
@@ -61,10 +70,23 @@ export function useLotStack(
     [query.data],
   );
 
-  const cards = useMemo(
-    () => allLots.filter((lot) => !resolvedIds.has(lot.id)),
-    [allLots, resolvedIds],
-  );
+  // The soonest closing lot on screen decides when this list re-asks.
+  useDueRefresh(soonestLotDueAt(allLots), () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.lots(auctionId) });
+  });
+
+  const cards = useMemo(() => {
+    const remaining = allLots.filter((lot) => !resolvedIds.has(lot.id));
+    if (skipped.length === 0) return remaining;
+
+    // Skipped cards keep their relative order but sit behind everything else.
+    const rank = new Map(skipped.map((id, index) => [id, index]));
+    const kept = remaining.filter((lot) => !rank.has(lot.id));
+    const moved = remaining
+      .filter((lot) => rank.has(lot.id))
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+    return [...kept, ...moved];
+  }, [allLots, resolvedIds, skipped]);
 
   useEffect(() => {
     if (cards.length < PREFETCH_THRESHOLD && hasNextPage && !isFetchingNextPage) {
@@ -91,6 +113,10 @@ export function useLotStack(
     [queryClient, onError],
   );
 
+  const skip = useCallback((lot: LotCard) => {
+    setSkipped((current) => [...current.filter((id) => id !== lot.id), lot.id]);
+  }, []);
+
   const undo = useCallback(async () => {
     const last = resolved[resolved.length - 1];
     if (!last) return null;
@@ -114,6 +140,7 @@ export function useLotStack(
     exhausted: cards.length === 0 && !hasNextPage && !query.isPending,
     canUndo: resolved.length > 0,
     decide,
+    skip,
     undo,
     refetch: () => void query.refetch(),
   };

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cancelAutoBid, getAuction, getLot } from "@/lib/api/endpoints";
 import { patchLot } from "@/lib/api/cache";
 import { queryKeys } from "@/lib/api/queryKeys";
+import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
@@ -43,6 +44,20 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
     queryFn: () => getAuction(lot!.auction_id),
     enabled: Boolean(lot?.auction_id),
   });
+
+  // A lot that has run out of clock, or one waiting for its auction to open,
+  // must resolve itself rather than sitting at zero.
+  useDueRefresh(
+    lot?.status === "live" ? lot.effective_ends_at
+    : lot?.status === "scheduled" ? auctionDueAt(auction)
+    : null,
+    () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) });
+      if (lot?.auction_id) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.auction(lot.auction_id) });
+      }
+    },
+  );
 
   const currency = auction?.currency_code ?? "ZAR";
 
