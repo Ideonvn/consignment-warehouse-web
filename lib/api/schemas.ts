@@ -8,12 +8,31 @@ import { z } from "zod";
 
 /* ---------------------------------------------------------------- auth --- */
 
+export const notificationChannelSchema = z.enum(["email", "sms", "whatsapp"]);
+
+/**
+ * Marketing consent for one channel. Transactional messages — outbid, won,
+ * payment — have no entry here because they cannot be switched off.
+ */
+export const notificationPreferenceSchema = z.object({
+  channel: notificationChannelSchema,
+  marketing_opt_in: z.boolean(),
+  consent_at: z.string().nullable(),
+  consent_source: z.string().nullable(),
+});
+
 export const userSchema = z.object({
   id: z.string(),
   phone_e164: z.string(),
   first_name: z.string().nullable(),
   last_name: z.string().nullable(),
   email: z.string().nullable(),
+  /** Null means unverified, and an unverified address is never routed to. */
+  email_verified_at: z.string().nullable(),
+  /** Set means mail to a *verified* address is bouncing: routable on paper, silent in practice. */
+  email_bounced_at: z.string().nullable(),
+  /** Empty means never asked — which is not the same as having declined. */
+  notification_preferences: z.array(notificationPreferenceSchema).default([]),
   /** What the bidder quotes when paying. Shown wherever we ask them to pay. */
   payment_reference: z.string().nullable(),
   status: z.enum(["active", "suspended", "deleted"]),

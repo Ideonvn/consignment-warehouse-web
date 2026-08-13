@@ -23,6 +23,7 @@ import type {
   LotCard,
   LotDetail,
   MyBid,
+  NotificationChannel,
   Swipe,
   SwipeDirection,
   TokenPair,
@@ -75,6 +76,35 @@ export function updateMe(input: {
   email?: string | null;
 }): Promise<User> {
   return apiGet("/auth/me", { method: "PATCH", body: input, schema: userSchema });
+}
+
+/** Sends a code to the address already on the account. Authenticated, and no body. */
+export function requestEmailVerification(): Promise<{ detail: string }> {
+  return apiGet("/auth/email/verify/request", {
+    method: "POST",
+    body: {},
+    schema: detailSchema,
+  });
+}
+
+/** Consumes the code. Returns the updated profile and no token — this is not a login. */
+export function verifyEmail(code: string): Promise<User> {
+  return apiGet("/auth/email/verify", { method: "POST", body: { code }, schema: userSchema });
+}
+
+/**
+ * Marketing consent, one channel at a time or several at once. **Omitted
+ * channels are left untouched by the server**, so callers send only what the
+ * user actually changed rather than restating choices they didn't make.
+ */
+export function setNotificationPreferences(
+  input: Partial<Record<NotificationChannel, boolean>>,
+): Promise<User> {
+  return apiGet("/auth/me/notification-preferences", {
+    method: "PUT",
+    body: input,
+    schema: userSchema,
+  });
 }
 
 /* ------------------------------------------------------------ auctions --- */

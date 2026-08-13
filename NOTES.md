@@ -109,6 +109,50 @@ Accepted, not outstanding — deliberately not being chased.
   auction's own `currency_code` instead of a hardcoded symbol. If a second currency ever appears
   this stays correct as written; only the reason for keeping it changes.
 
+## Email verification and marketing preferences
+
+Wired into `/profile` against the new `GET /auth/me` fields, `POST /auth/email/verify/request`,
+`POST /auth/email/verify` and `PUT /auth/me/notification-preferences`.
+
+**Judgement calls**
+
+- **Bounced is checked before verified.** A bounced address is *also* verified, so the naive order
+  shows a green tick to someone receiving nothing. The bounced state offers no "resend" either: the
+  server refuses a code for a verified address (422), and only correcting the address helps.
+- **No "verify" prompt when there is no address.** A line saying everything goes by SMS, and a nudge
+  to add one — an empty field with a verification call to action attached reads as an error.
+- **The wait is rendered in minutes above 90s.** The email limiter counts per hour, so a real
+  `Retry-After` here is 3600. The login flow's seconds-only wording would have shown "3591s".
+- **The save button only sends moved channels**, and shows "Save change"/"Save changes" by count.
+  Consent carries a timestamp, and restating an unchanged channel would re-stamp it.
+
+**Found while building: the login code input was four boxes against a six-digit backend.**
+`generate_otp_code()` returns six digits unless `APP_ENV=local` *and* `OTP_DEV_CODE` is set — which
+is exactly why nobody noticed locally, where it returns `0000`. The login form hardcoded
+`CODE_LENGTH = 4`, so in production the box count would never have matched the code. Both inputs now
+read `OTP_CODE_LENGTH` from `lib/auth/otpCode.ts`, defaulting to 6, with
+`NEXT_PUBLIC_OTP_CODE_LENGTH=4` in `.env.local` for the seeded local backend. **This is a real
+production fix that happened to fall out of an unrelated feature** — worth knowing that the local
+dev code was hiding it.
+
+**Verified against the running backend** (bidder `+27820000002`, seeded local API):
+
+| Check | Result |
+|---|---|
+| Address added, unverified | The block reads "Email not verified" with the SMS consequence and a send button. |
+| Code requested | 200, code entry appears, four boxes matching the local dev code, resend locked for 58s. |
+| Wrong code | 422 → "That code isn't right, or it has expired.", boxes cleared, resend timer intact. |
+| Correct code | Flipped to "Email verified" with **no reload** — the response replaces the session user. |
+| Address changed | Verification cleared **immediately**, and still cleared after a reload. |
+| Bounced | Forced `email_bounced_at` in the database: the red "Email to this address is failing" block replaced the tick, and no resend was offered. |
+| One channel saved | Request body was exactly `{"sms":true}`. Email kept its original 16:33 consent time, WhatsApp stayed "Not set". |
+| Persistence | After a reload: SMS on with its own 20:26 timestamp, from the server. |
+| Rate limit | Four requests → 429 with `Retry-After: 3600`; the button showed the wait and stayed disabled. |
+| Never-asked | Empty preference rows read "Not set — we haven't asked yet", switch off, no implied refusal. |
+
+Light theme: the "on" switch is the accent fill at 1.11:1 against the card, carried by
+`--accent-edge` at 5.9:1 — the same pattern as the primary button, not a new deviation.
+
 ## Backend surface adopted
 
 The backend was extended in response to the requests above, and the client workarounds they

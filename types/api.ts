@@ -13,6 +13,8 @@ import type {
   ledgerEntryTypeSchema,
   lotStatusSchema,
   myBidSchema,
+  notificationChannelSchema,
+  notificationPreferenceSchema,
   serverMessageSchema,
   swipeDirectionSchema,
   swipeSchema,
@@ -29,6 +31,8 @@ import type {
 export type User = z.infer<typeof userSchema>;
 export type UserStatus = User["status"];
 export type UserRole = User["role"];
+export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
 export type TokenPair = z.infer<typeof tokenPairSchema>;
 
 export type Auction = z.infer<typeof auctionSchema>;

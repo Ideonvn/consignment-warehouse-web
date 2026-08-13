@@ -14,6 +14,8 @@ import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
 import { ThemeSetting } from "@/components/theme/ThemeSetting";
 import { AccountSummaryLink } from "@/components/account/AccountSummaryLink";
+import { EmailVerification } from "@/components/profile/EmailVerification";
+import { MarketingPreferences } from "@/components/profile/MarketingPreferences";
 
 export function ProfileScreen() {
   const router = useRouter();
@@ -91,9 +93,17 @@ export function ProfileScreen() {
           error={error}
           hint="Used for win notifications and invoices."
         />
+        {/* Reads off the session user, which `save` replaces with the PATCH
+            response — so changing an address shows as unverified immediately
+            rather than keeping a stale tick until the next fetch. */}
+        <EmailVerification />
         <Button onClick={save} loading={saving} fullWidth>
           Save changes
         </Button>
+      </div>
+
+      <div className="mt-6">
+        <MarketingPreferences />
       </div>
 
       <div className="mt-6">

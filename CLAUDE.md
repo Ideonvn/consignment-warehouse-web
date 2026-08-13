@@ -256,6 +256,51 @@ reference is one the operator has to chase.
 Payment is arranged manually with the operator today; there is no payment flow in the product. The
 fallback is an honest "contact the warehouse" line rather than invented bank details.
 
+## Email verification and marketing consent
+
+Both live on `/profile` and both read from the session user, which is replaced by whatever the
+mutation returned — that is what makes the states flip without a refetch.
+
+**An address has three states, not two, and the third is the one that hurts.** Unverified is
+ordinary. Verified is quiet. **Bounced** (`email_bounced_at` set) means the address passed
+verification and is now undeliverable — the user sees a tick and receives nothing, with no way to
+work out why. So `EmailVerification` checks `email_bounced_at` *before* `email_verified_at` and says
+plainly that mail is failing. It offers no "resend": the server refuses a code for an already
+verified address, and only correcting the address fixes anything.
+
+**Say the consequence, not the policy.** An unverified address is never routed to, so the copy is
+"everything goes to you by SMS until you confirm this" — not a compliance notice. Nobody verifies an
+address to satisfy a rule; they do it to stop missing things.
+
+**Changing an email clears its verification server-side**, so `save()` must feed the PATCH response
+into the session user. Keeping the old user object would leave a stale "verified" tick on an address
+that is nothing of the sort.
+
+**Verification is not a login.** It requires an existing session, issues no token, and changes
+nothing about the session. Phone remains the only authentication identity — do not let this flow
+grow a "sign in with email" affordance.
+
+**The email code limiter is not the login OTP limiter** — 5/hour per address and 10/hour per user,
+counted separately, and its `Retry-After` is measured in thousands of seconds. Handle the 429 from
+the header and render the wait in minutes; "3591s" is not a wait anyone can picture.
+
+**Preferences are marketing only, and the UI has to say so.** Someone who believes they have muted
+everything and then misses an outbid alert is a support call nobody can answer well. The card states
+outright that outbid, won and payment messages are always sent — that sentence is load-bearing, not
+decoration.
+
+**Never-asked is not opted-out.** An empty `notification_preferences` array means nobody has asked,
+and it renders as "Not set", never as a refusal.
+
+**Send only the channels the user actually moved.** `PUT /auth/me/notification-preferences` leaves
+omitted channels untouched, so restating all three would stamp a fresh consent timestamp on choices
+they never made — and consent is an auditable act.
+
+**`OTP_CODE_LENGTH` (`lib/auth/otpCode.ts`) is shared by the login and email code inputs.** The
+backend issues six digits for both; the value is overridable only because a local backend with
+`OTP_DEV_CODE` set returns a shorter fixed code, and a six-box input cannot be completed with four
+digits. Production runs on the default.
+
 ## Structure
 
 - `app/` — routes. `(app)/` is everything behind the sign-in wall (guard, bottom nav, realtime

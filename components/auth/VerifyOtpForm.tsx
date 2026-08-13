@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api/errors";
 import { getMe, requestOtp, verifyOtp } from "@/lib/api/endpoints";
 import { getDeviceId, getDeviceName } from "@/lib/auth/device";
 import { formatPhoneForDisplay, useLoginFlow } from "@/lib/auth/loginFlow";
+import { OTP_CODE_LENGTH } from "@/lib/auth/otpCode";
 import { isProfileComplete, useSession } from "@/lib/auth/session";
 import { useNow } from "@/lib/hooks/useTicker";
 import { Button } from "@/components/ui/Button";
@@ -14,7 +15,7 @@ import { OtpInput } from "@/components/auth/OtpInput";
 import { PhoneColumn } from "@/components/layout/PhoneColumn";
 import { Wordmark } from "@/components/layout/Wordmark";
 
-const CODE_LENGTH = 4;
+const CODE_LENGTH = OTP_CODE_LENGTH;
 
 export function VerifyOtpForm() {
   const router = useRouter();
