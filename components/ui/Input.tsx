@@ -42,7 +42,9 @@ export function Input({
 
       <div
         className={cn(
-          "flex items-center gap-2 rounded-2xl border bg-surface-raised px-4",
+          // `field` hands the focus ring to this wrapper, which is the element
+          // with the radius — see globals.css.
+          "field flex items-center gap-2 rounded-2xl border bg-surface-raised px-4",
           "focus-within:border-accent-text/60",
           error ? "border-danger/60" : "border-border-strong",
         )}

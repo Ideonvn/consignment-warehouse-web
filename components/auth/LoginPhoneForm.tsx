@@ -4,10 +4,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api/errors";
 import { requestOtp } from "@/lib/api/endpoints";
-import { isValidE164, normalisePhone, useLoginFlow } from "@/lib/auth/loginFlow";
+import { isValidE164, useLoginFlow } from "@/lib/auth/loginFlow";
+import { DEFAULT_COUNTRY, type Country } from "@/lib/auth/countries";
+import { toE164 } from "@/lib/auth/phone";
 import { useSession } from "@/lib/auth/session";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { PhoneField } from "@/components/auth/PhoneField";
 import { PhoneColumn } from "@/components/layout/PhoneColumn";
 import { Wordmark } from "@/components/layout/Wordmark";
 
@@ -19,7 +21,10 @@ export function LoginPhoneForm() {
   const status = useSession((state) => state.status);
   const startVerification = useLoginFlow((state) => state.startVerification);
 
-  const [phone, setPhone] = useState("+27");
+  // Country and national digits are kept apart: the field formats the national
+  // part for the eye, and only `toE164` ever produces what the wire sees.
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [national, setNational] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,10 +34,10 @@ export function LoginPhoneForm() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const e164 = normalisePhone(phone);
+    const e164 = toE164(country, national);
 
     if (!isValidE164(e164)) {
-      setError("Enter your number in full international format, e.g. +27 82 123 4567.");
+      setError(`That number looks incomplete. Check the digits after +${country.dial}.`);
       return;
     }
 
@@ -70,17 +75,16 @@ export function LoginPhoneForm() {
         </p>
 
         <form onSubmit={onSubmit} className="mt-8" noValidate>
-          <Input
-            label="Mobile number"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
+          <PhoneField
+            country={country}
+            national={national}
+            onChange={(next) => {
+              setCountry(next.country);
+              setNational(next.national);
+            }}
             autoFocus
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
             error={error}
-            hint="Include your country code — for South Africa that's +27."
-            placeholder="+27 82 123 4567"
+            hint="We'll text a code to this number."
           />
 
           <Button type="submit" size="lg" fullWidth loading={submitting} className="mt-6">

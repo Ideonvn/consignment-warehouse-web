@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { LotCardFace } from "@/components/lot/LotCardFace";
 import type { LotCard, SwipeDirection } from "@/types/api";
 
@@ -9,8 +9,9 @@ import type { LotCard, SwipeDirection } from "@/types/api";
 const COMMIT_DISTANCE = 110;
 const COMMIT_VELOCITY = 550;
 /**
- * Up needs a longer, faster pull than left or right. It shares an axis with the
- * page's own scrolling, so the gesture has to be unmistakably deliberate.
+ * The vertical gestures need a longer, faster pull than left or right. They
+ * share an axis with the page's own scrolling, so each has to be unmistakably
+ * deliberate — up sets a lot aside, down brings the last one back.
  */
 const SKIP_DISTANCE = 150;
 const SKIP_VELOCITY = 700;
@@ -23,6 +24,8 @@ export function SwipeCard({
   currency,
   onDecide,
   onSkip,
+  onUndo,
+  canUndo,
   onOpen,
   bidLabel,
 }: {
@@ -30,6 +33,9 @@ export function SwipeCard({
   currency: string;
   onDecide: (direction: SwipeDirection) => void;
   onSkip: () => void;
+  /** Pulling down reverses the last gesture — the natural inverse of skipping. */
+  onUndo: () => void;
+  canUndo: boolean;
   onOpen: () => void;
   /** "Bid" once bidding is open, "Save" before it opens. */
   bidLabel: string;
@@ -44,6 +50,7 @@ export function SwipeCard({
   const passOpacity = useTransform(x, [-COMMIT_DISTANCE, -24], [1, 0]);
   const bidOpacity = useTransform(x, [24, COMMIT_DISTANCE], [0, 1]);
   const skipOpacity = useTransform(y, [-SKIP_DISTANCE, -32], [1, 0]);
+  const undoOpacity = useTransform(y, [32, SKIP_DISTANCE], [0, 1]);
 
   return (
     <motion.div
@@ -76,11 +83,28 @@ export function SwipeCard({
           return;
         }
 
-        // Up only. Dragging a card downwards decides nothing.
         const skipped =
           info.offset.y < -SKIP_DISTANCE ||
           (info.offset.y < -40 && info.velocity.y < -SKIP_VELOCITY);
-        if (skipped) onSkip();
+        if (skipped) {
+          onSkip();
+          return;
+        }
+
+        const pulledBack =
+          info.offset.y > SKIP_DISTANCE ||
+          (info.offset.y > 40 && info.velocity.y > SKIP_VELOCITY);
+        if (!pulledBack) return;
+
+        if (canUndo) {
+          onUndo();
+          return;
+        }
+        // Nothing to bring back: resist rather than swallow the gesture, so it
+        // stays discoverable without implying something happened.
+        if (!reduceMotion) {
+          animate(y, [0, 26, 0], { duration: 0.34, ease: "easeOut", times: [0, 0.4, 1] });
+        }
       }}
       initial={reduceMotion ? false : { scale: 0.96, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
@@ -136,6 +160,16 @@ export function SwipeCard({
       >
         Skip
       </motion.div>
+      {/* Only promised when there is something to bring back. */}
+      {canUndo ? (
+        <motion.div
+          aria-hidden
+          style={{ opacity: reduceMotion ? 0 : undoOpacity }}
+          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-xl border-2 border-text-muted px-4 py-2 text-lg font-bold tracking-widest text-text-muted uppercase"
+        >
+          Undo
+        </motion.div>
+      ) : null}
     </motion.div>
   );
 }

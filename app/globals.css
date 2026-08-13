@@ -138,10 +138,31 @@ body {
   font-feature-settings: "tnum";
 }
 
-/* Visible, high-contrast focus for keyboard users everywhere. */
+/* Visible, high-contrast focus for keyboard users everywhere.
+
+   Note this rule is deliberately unlayered, which means it beats Tailwind's
+   `outline-none` utility no matter what: in v4 utilities live in `@layer
+   utilities`, and unlayered CSS wins over layered CSS regardless of specificity.
+   A field that wants a different ring has to say so here, not at the call site. */
 :focus-visible {
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
+}
+
+/* A ring belongs on whatever element carries the corner radius.
+
+   Our text fields are a rounded wrapper around a bare `input` — the wrapper owns
+   the radius, the border and any prefix or adornment, and the input inside has
+   no radius at all. An outline follows the radius of the element it is drawn on,
+   so the input's own ring came out square across the rounded field. Hoisting it
+   to `.field` is what makes it follow the corners, and it covers every adornment
+   variant (currency symbol, country selector) for free. */
+.field:has(:focus-visible) {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+.field :focus-visible {
+  outline: none;
 }
 
 .no-scrollbar::-webkit-scrollbar {

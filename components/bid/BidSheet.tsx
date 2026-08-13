@@ -217,93 +217,107 @@ function BidSheetBody({
         </div>
       </div>
 
-      <div className="mt-5">
-        <label htmlFor="bid-max" className="block text-sm font-medium text-text-muted">
-          Your maximum
-        </label>
-        <div
-          className={cn(
-            "mt-2 flex items-center gap-2 rounded-2xl border bg-surface-raised px-4",
-            validationError
-              ? "border-danger/60"
-              : "border-border-strong focus-within:border-accent-text/60",
-          )}
-        >
-          <span className="text-2xl text-text-muted">{currencySymbol(currency)}</span>
-          <input
-            id="bid-max"
-            value={value}
-            onChange={(event) => setTyped(event.target.value)}
-            inputMode="decimal"
-            autoComplete="off"
-            aria-describedby="bid-explainer"
-            aria-invalid={validationError ? true : undefined}
-            className="tabular min-h-16 w-full bg-transparent text-3xl font-semibold outline-none"
-          />
-        </div>
-
-        <div className="mt-3 flex gap-2">
-          {[1, 2, 5].map((multiple) => {
-            const target = (amountMinor ?? minimum) + step * multiple;
-            return (
-              <button
-                key={multiple}
-                type="button"
-                onClick={() => setTyped(toMajorInputValue(target))}
-                className="tabular min-h-11 flex-1 rounded-full border border-border bg-surface-raised text-sm font-medium hover:border-accent/50"
-              >
-                +{formatMoney(step * multiple, currency)}
-              </button>
-            );
-          })}
-        </div>
-
-        {validationError ? (
-          <p role="alert" className="mt-3 text-sm text-danger">
-            {validationError}
-          </p>
-        ) : null}
-        {outcome?.kind === "too-low" ? (
-          <p role="alert" className="mt-3 text-sm text-danger">
-            Someone bid just before you. The minimum is now{" "}
-            {formatMoney(minimum, currency)}.
-          </p>
-        ) : null}
-        {outcome?.kind === "error" ? (
-          <p role="alert" className="mt-3 text-sm text-danger">
-            {outcome.message}
-            {outcome.retryAfter ? ` Try again in ${outcome.retryAfter}s.` : ""}
-          </p>
-        ) : null}
-      </div>
-
-      <div id="bid-explainer" className="mt-5 rounded-2xl border border-border bg-surface-raised p-4">
-        <p className="text-sm font-semibold">
-          You&apos;ll pay only what it takes to win, up to{" "}
-          <Money minor={amountMinor ?? minimum} currency={currency} />.
-        </p>
-        <p className="mt-1 text-sm text-text-muted">
-          We bid for you automatically. Right now that means{" "}
-          <Money minor={payNow} currency={currency} className="text-text" />.
-        </p>
-        {existingMax !== null ? (
-          <p className="mt-2 text-xs text-text-muted">
-            Your current maximum is <Money minor={existingMax} currency={currency} />. Maximums can
-            only be raised, never lowered.
-          </p>
-        ) : null}
-      </div>
-
-      <Button
-        size="lg"
-        fullWidth
-        className="mt-5"
-        loading={inFlight}
-        disabled={!canSubmit}
-        onClick={confirm}
+      {/* A form, so the keyboard's action key places the bid — otherwise the only
+          way through on a small screen is dismissing the keyboard and scrolling
+          to the button. `confirm` keeps its own guards, so neither route can
+          bypass them, and the button stays exactly where it is: iOS numeric
+          keypads often have no return key at all, which makes this an addition
+          to the button and never a replacement for it. */}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void confirm();
+        }}
       >
-        Confirm — up to {formatMoney(amountMinor ?? minimum, currency)}
-      </Button>
+        <div className="mt-5">
+          <label htmlFor="bid-max" className="block text-sm font-medium text-text-muted">
+            Your maximum
+          </label>
+          <div
+            className={cn(
+              "field mt-2 flex items-center gap-2 rounded-2xl border bg-surface-raised px-4",
+              validationError
+                ? "border-danger/60"
+                : "border-border-strong focus-within:border-accent-text/60",
+            )}
+          >
+            <span className="text-2xl text-text-muted">{currencySymbol(currency)}</span>
+            <input
+              id="bid-max"
+              value={value}
+              onChange={(event) => setTyped(event.target.value)}
+              inputMode="decimal"
+              enterKeyHint="go"
+              autoComplete="off"
+              aria-describedby="bid-explainer"
+              aria-invalid={validationError ? true : undefined}
+              className="tabular min-h-16 w-full bg-transparent text-3xl font-semibold outline-none"
+            />
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            {[1, 2, 5].map((multiple) => {
+              const target = (amountMinor ?? minimum) + step * multiple;
+              return (
+                <button
+                  key={multiple}
+                  type="button"
+                  onClick={() => setTyped(toMajorInputValue(target))}
+                  className="tabular min-h-11 flex-1 rounded-full border border-border bg-surface-raised text-sm font-medium hover:border-accent/50"
+                >
+                  +{formatMoney(step * multiple, currency)}
+                </button>
+              );
+            })}
+          </div>
+
+          {validationError ? (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              {validationError}
+            </p>
+          ) : null}
+          {outcome?.kind === "too-low" ? (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              Someone bid just before you. The minimum is now{" "}
+              {formatMoney(minimum, currency)}.
+            </p>
+          ) : null}
+          {outcome?.kind === "error" ? (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              {outcome.message}
+              {outcome.retryAfter ? ` Try again in ${outcome.retryAfter}s.` : ""}
+            </p>
+          ) : null}
+        </div>
+
+        <div id="bid-explainer" className="mt-5 rounded-2xl border border-border bg-surface-raised p-4">
+          <p className="text-sm font-semibold">
+            You&apos;ll pay only what it takes to win, up to{" "}
+            <Money minor={amountMinor ?? minimum} currency={currency} />.
+          </p>
+          <p className="mt-1 text-sm text-text-muted">
+            We bid for you automatically. Right now that means{" "}
+            <Money minor={payNow} currency={currency} className="text-text" />.
+          </p>
+          {existingMax !== null ? (
+            <p className="mt-2 text-xs text-text-muted">
+              Your current maximum is <Money minor={existingMax} currency={currency} />. Maximums can
+              only be raised, never lowered.
+            </p>
+          ) : null}
+        </div>
+
+        <Button
+          type="submit"
+          size="lg"
+          fullWidth
+          className="mt-5"
+          loading={inFlight}
+          disabled={!canSubmit}
+        >
+          Confirm — up to {formatMoney(amountMinor ?? minimum, currency)}
+        </Button>
+      </form>
 
       <button
         type="button"

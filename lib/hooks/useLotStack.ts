@@ -11,7 +11,16 @@ const PAGE_SIZE = 20;
 /** Fetch more while there are still cards to look at, never at zero. */
 const PREFETCH_THRESHOLD = 6;
 
-type Decision = { lotId: string; direction: SwipeDirection };
+/**
+ * One reversible thing the user did, newest last.
+ *
+ * Passes, bid-sheet swipes and skips share this list so undo walks all three in
+ * the order they actually happened — undoing a skip that came after a pass must
+ * bring the skip back first, not the pass.
+ */
+type Action =
+  | { kind: "decision"; lotId: string; direction: SwipeDirection }
+  | { kind: "skip"; lotId: string };
 
 export type LotStack = {
   cards: LotCard[];
@@ -28,6 +37,11 @@ export type LotStack = {
    * is "not now", not a preference the user then has to manage.
    */
   skip: (lot: LotCard) => void;
+  /**
+   * Reverse the most recent gesture, whatever it was. A pass or an interested
+   * swipe also deletes the swipe server-side; a skip was never sent, so undoing
+   * one is pure stack manipulation and sends nothing.
+   */
   undo: () => Promise<LotCard | null>;
   refetch: () => void;
 };
@@ -42,9 +56,7 @@ export function useLotStack(
   onError: (message: string) => void,
 ): LotStack {
   const queryClient = useQueryClient();
-  const [resolved, setResolved] = useState<Decision[]>([]);
-  /** Lot ids pushed to the back, in the order they were skipped. Never persisted. */
-  const [skipped, setSkipped] = useState<string[]>([]);
+  const [history, setHistory] = useState<Action[]>([]);
 
   const query = useInfiniteQuery({
     queryKey: queryKeys.lots(auctionId),
@@ -61,9 +73,18 @@ export function useLotStack(
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = query;
 
   const resolvedIds = useMemo(
-    () => new Set(resolved.map((entry) => entry.lotId)),
-    [resolved],
+    () =>
+      new Set(
+        history.filter((entry) => entry.kind === "decision").map((entry) => entry.lotId),
+      ),
+    [history],
   );
+
+  /** Skipped ids, oldest first; a re-skip counts only at its newest position. */
+  const skipped = useMemo(() => {
+    const ids = history.filter((entry) => entry.kind === "skip").map((entry) => entry.lotId);
+    return ids.filter((id, index) => ids.lastIndexOf(id) === index);
+  }, [history]);
 
   const allLots = useMemo(
     () => query.data?.pages.flatMap((page) => page.data) ?? [],
@@ -96,7 +117,7 @@ export function useLotStack(
 
   const decide = useCallback(
     async (lot: LotCard, direction: SwipeDirection) => {
-      setResolved((current) => [...current, { lotId: lot.id, direction }]);
+      setHistory((current) => [...current, { kind: "decision", lotId: lot.id, direction }]);
       try {
         await setSwipe(lot.id, direction);
         // The lot's own cache entry knows about the swipe now.
@@ -106,7 +127,9 @@ export function useLotStack(
             : existing,
         );
       } catch {
-        setResolved((current) => current.filter((entry) => entry.lotId !== lot.id));
+        setHistory((current) =>
+          current.filter((entry) => !(entry.kind === "decision" && entry.lotId === lot.id)),
+        );
         onError("That swipe didn't save. Try again.");
       }
     },
@@ -114,23 +137,30 @@ export function useLotStack(
   );
 
   const skip = useCallback((lot: LotCard) => {
-    setSkipped((current) => [...current.filter((id) => id !== lot.id), lot.id]);
+    setHistory((current) => [...current, { kind: "skip", lotId: lot.id }]);
   }, []);
 
   const undo = useCallback(async () => {
-    const last = resolved[resolved.length - 1];
+    const last = history[history.length - 1];
     if (!last) return null;
 
-    setResolved((current) => current.slice(0, -1));
+    const restored = allLots.find((lot) => lot.id === last.lotId) ?? null;
+    setHistory((current) => current.slice(0, -1));
+
+    // A skip never left the device. Dropping it from the history is the whole
+    // undo: the lot stops being sorted to the back and returns to its place,
+    // which — being the earliest lot still unresolved — is the front.
+    if (last.kind === "skip") return restored;
+
     try {
       await deleteSwipe(last.lotId);
     } catch {
-      setResolved((current) => [...current, last]);
+      setHistory((current) => [...current, last]);
       onError("Couldn't undo that. Try again.");
       return null;
     }
-    return allLots.find((lot) => lot.id === last.lotId) ?? null;
-  }, [resolved, allLots, onError]);
+    return restored;
+  }, [history, allLots, onError]);
 
   return {
     cards,
@@ -138,7 +168,7 @@ export function useLotStack(
     error: query.error,
     isFetchingMore: isFetchingNextPage,
     exhausted: cards.length === 0 && !hasNextPage && !query.isPending,
-    canUndo: resolved.length > 0,
+    canUndo: history.length > 0,
     decide,
     skip,
     undo,

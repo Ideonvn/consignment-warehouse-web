@@ -40,6 +40,10 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      // HTML defaults a bare `<button>` inside a form to `type="submit"`, so a
+      // secondary action placed in one — "Resend", a cancel — silently submits
+      // it. Submitting is always opt-in here; every form's submit button says so.
+      type="button"
       {...props}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

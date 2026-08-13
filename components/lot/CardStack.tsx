@@ -119,11 +119,16 @@ export function CardStack({
         role="group"
         aria-label={
           biddingOpen
-            ? "Lot stack. Left arrow passes, right arrow bids, up arrow skips."
-            : "Lot stack. Left arrow passes, right arrow saves, up arrow skips."
+            ? "Lot stack. Left arrow passes, right arrow bids, up arrow skips, down arrow undoes."
+            : "Lot stack. Left arrow passes, right arrow saves, up arrow skips, down arrow undoes."
         }
         tabIndex={0}
         onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            undo();
+            return;
+          }
           if (!top) return;
           if (event.key === "ArrowLeft") {
             event.preventDefault();
@@ -167,6 +172,8 @@ export function CardStack({
                   currency={currency}
                   onDecide={(direction) => decide(top, direction)}
                   onSkip={() => skip(top)}
+                  onUndo={undo}
+                  canUndo={stack.canUndo}
                   bidLabel={biddingOpen ? "Bid" : "Save"}
                   onOpen={() => router.push(`/lots/${top.id}`)}
                 />

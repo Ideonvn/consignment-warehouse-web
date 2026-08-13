@@ -107,6 +107,34 @@ The card area is `min-h-0 flex-1`: when height is short the *card* shrinks, neve
 stay at 56/48/56 px against a 44 px minimum. Verify any change to either token on a scheduled
 auction (the "bidding opens in…" banner costs the most height) at ~360×480.
 
+**A focus ring belongs on the element that carries the corner radius.** Our text fields are a
+rounded wrapper around a bare `input`: the wrapper owns the radius, the border and any adornment,
+and the input inside has no radius at all, so its own outline drew a square across the rounded
+field. The `.field` class in `app/globals.css` hoists the ring to the wrapper and suppresses the
+inner one. Two things make this a rule rather than a patch. First, the global `:focus-visible` rule
+is **unlayered**, and unlayered CSS beats Tailwind's `@layer utilities` regardless of specificity —
+`outline-none` at the call site never had a chance, so opting out has to happen in `globals.css`.
+Second, every new adornment variant (currency symbol, country selector) gets it for free. Any new
+wrapped field takes `field`; a bare rounded input like the OTP boxes needs nothing.
+
+**A single input that leads to a primary action lives in a `<form>`.** The keyboard's action key is
+the natural way to finish, and without a form it does nothing — on a small screen that costs the
+user a keyboard dismissal and a scroll. Pair it with `enterKeyHint="go"`. Two constraints: the
+submit button keeps its `disabled` guard, which is also what makes the browser refuse implicit
+submission while validation fails, and the button itself never goes away — **iOS numeric keypads
+frequently have no return key**, so with `inputMode="decimal"` this improves Android and changes
+nothing on iOS. `Button` defaults to `type="button"` for the same family of reasons: a bare
+`<button>` in a form submits it, so "Resend" next to "Verify" would have fired both.
+
+**Phone entry is hand-rolled, and the wire format is not negotiable.** `PhoneField` shows a country
+prefix and groups the national part as it is typed; `lib/auth/phone.ts` composes the E.164 string,
+and the spaces never leave the screen. The backend requires strict E.164 and infers no country, so
+`0821234567`, `+27 82 123 4567` and `820000002` all have to converge — they do, in `parseEntry`. An
+unlisted dial code is the case to be careful with: it resolves to `UNLISTED_COUNTRY`, whose empty
+dial prepends nothing, because composing `+27` onto a number that already carries `+678` produced a
+wrong number that looked plausible. See that file for why `libphonenumber-js` was measured and
+declined, and for what "approximate" means outside the countries with an explicit `groups` pattern.
+
 **A countdown reaching zero must trigger a refetch, not sit at zero.** Expiry changes what the
 user may do, but the status that says so is written by the lifecycle worker on its next tick — so
 from that moment client and server disagree and only the client knows to resolve it. `useDueRefresh`
@@ -127,16 +155,28 @@ may see. `reserve_price_minor` is admin-only and must not be requested, stored o
 and per lot — server-owned. Read it from the lot, from the bid response, or from the 422 that tells
 you someone bid first.
 
-## The three gestures, and the win
+## The four gestures, and the win
 
 Left is pass and right is bid — both recorded through `PUT /swipe`, both recoverable from My bids.
 **Up is skip, and it is deliberately not remembered**: no request, nothing persisted, the card moves
 to the back of the current stack and is back on the next load. It exists so someone can move past a
-lot without acquiring another list to manage. Do not "improve" it by saving it. It needs a longer,
-faster pull than left/right because it shares an axis with page scrolling, and the card sets
-`touch-none` so the browser cannot claim the gesture first.
+lot without acquiring another list to manage. Do not "improve" it by saving it.
 
-Every gesture has three ways in: the drag, a button, and an arrow key (←, →, ↑).
+**Down is undo, the inverse of up** — up sets a lot aside, down brings the last one back, which is
+also the direction a list scrolls back. Both vertical gestures need a longer, faster pull than
+left/right (150px or 700px/s, against 110/550) because they share an axis with page scrolling, and
+the card sets `touch-none` so the browser cannot claim the gesture first.
+
+**Undo covers all three gestures, newest first**, from one `history` list in `useLotStack` — mixing
+a pass, a skip and a bid must rewind in the order they actually happened. Undoing a pass or an
+interested swipe deletes the swipe server-side; **undoing a skip sends nothing**, because a skip was
+never anything but local: dropping it from the history stops the lot being sorted to the back, and
+it returns to the front on its own as the earliest lot still unresolved. With nothing to undo, the
+card bounces rather than silently absorbing the pull — a gesture that does nothing invisibly is one
+nobody discovers. The "UNDO" drag hint appears only when there is something to bring back, and the
+Undo button stays: the gesture is an addition, never a replacement.
+
+Every gesture has three ways in: the drag, a button, and an arrow key (←, →, ↑, ↓).
 
 **Winning is announced once, properly.** A win is a `/me/bids` row that has ended with the user
 still leading. Which wins have been celebrated lives in `localStorage` (`cw.wins_seen`) — it is

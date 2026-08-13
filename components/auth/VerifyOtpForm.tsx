@@ -114,32 +114,43 @@ export function VerifyOtpForm() {
           </Link>
         </p>
 
-        <div className="mt-8">
-          <OtpInput
-            value={code}
-            onChange={setCode}
-            onComplete={submit}
-            length={CODE_LENGTH}
-            disabled={submitting}
-            invalid={Boolean(error)}
-          />
-          {error ? (
-            <p role="alert" className="mt-3 text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-        </div>
-
-        <Button
-          size="lg"
-          fullWidth
-          className="mt-6"
-          loading={submitting}
-          disabled={code.length < CODE_LENGTH}
-          onClick={() => submit(code)}
+        {/* The code boxes auto-submit when the last one is filled, but a form is
+            what makes the keyboard's action key work for someone who typed the
+            last digit and reached for it anyway. `submit` guards on `submitting`
+            either way. */}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(code);
+          }}
         >
-          Verify
-        </Button>
+          <div className="mt-8">
+            <OtpInput
+              value={code}
+              onChange={setCode}
+              onComplete={submit}
+              length={CODE_LENGTH}
+              disabled={submitting}
+              invalid={Boolean(error)}
+            />
+            {error ? (
+              <p role="alert" className="mt-3 text-sm text-danger">
+                {error}
+              </p>
+            ) : null}
+          </div>
+
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            className="mt-6"
+            loading={submitting}
+            disabled={code.length < CODE_LENGTH}
+          >
+            Verify
+          </Button>
+        </form>
 
         <Button
           variant="ghost"

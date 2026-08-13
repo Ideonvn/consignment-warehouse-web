@@ -143,7 +143,16 @@ export function EmailVerification() {
       </p>
 
       {entering ? (
-        <div className="mt-3">
+        // Same reason as the login code screen: the boxes auto-submit on the
+        // last digit, and the form covers the person who reaches for the
+        // keyboard's action key instead.
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(code);
+          }}
+          className="mt-3"
+        >
           <p className="text-xs text-text-muted">
             Enter the {OTP_CODE_LENGTH}-digit code we sent to{" "}
             <span className="text-text">{address}</span>.
@@ -160,10 +169,10 @@ export function EmailVerification() {
           </div>
           <div className="mt-3 flex gap-2">
             <Button
+              type="submit"
               fullWidth
               loading={verifying}
               disabled={code.length < OTP_CODE_LENGTH}
-              onClick={() => submit(code)}
             >
               Verify
             </Button>
@@ -176,7 +185,7 @@ export function EmailVerification() {
               {waitSeconds > 0 ? `Resend in ${formatWait(waitSeconds)}` : "Resend"}
             </Button>
           </div>
-        </div>
+        </form>
       ) : (
         <Button
           variant="secondary"

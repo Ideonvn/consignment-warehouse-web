@@ -94,6 +94,7 @@ export function OtpInput({
           onFocus={(event) => event.target.select()}
           disabled={disabled}
           inputMode="numeric"
+          enterKeyHint="go"
           autoComplete={index === 0 ? "one-time-code" : "off"}
           aria-label={`Digit ${index + 1} of ${length}`}
           aria-invalid={invalid || undefined}

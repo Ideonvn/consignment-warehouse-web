@@ -153,6 +153,62 @@ dev code was hiding it.
 Light theme: the "on" switch is the accent fill at 1.11:1 against the card, carried by
 `--accent-edge` at 5.9:1 — the same pattern as the primary button, not a new deviation.
 
+## Device-testing round: phone entry, focus ring, keyboard submit, undo
+
+**`libphonenumber-js` was measured, then declined.** Bundled `AsYouType` +
+`isValidPhoneNumber` + `parsePhoneNumberFromString` from the `min` metadata build with esbuild:
+**157.5 KB raw, 35.7 KB gzipped** (v1.13.10). This app's entire client JS is ~350 KB gzipped across
+all chunks, so the library is roughly **+10%** of everything the browser downloads — for a
+mobile-first product whose bidders are almost all on one dial code. What it actually buys is
+per-country *validity*, and the server is the authority on that regardless: an unusable number comes
+back as a 422 either way, and the client's job is to help people get it right rather than to gate
+them. So: a curated country list (Africa in full, plus the markets a South African buyer plausibly
+bids from), grouping as you type, and `parseEntry` handling the three shapes people produce.
+
+**The cost of that choice, stated plainly:** grouping is exact only where a country carries an
+explicit `groups` pattern — ZA `82 123 4567`, GB `7911 123456`, NANP `212 555 0100`. Everywhere else
+falls back to threes, which is countable but not necessarily how a local writes it. The list is also
+curated rather than complete. Both are survivable because the escape hatch is real: any `+…` number
+is accepted whole and submitted as typed, whether or not its code is in the list. If the warehouse
+ever sells into a second country seriously, `formatNational` is the single seam to swap.
+
+**A bug the assertions caught before the browser did.** Pasting `+678 555 1234` (Vanuatu, unlisted)
+produced `+276785551234` — the selected country's code composed onto a number that already carried
+its own, which is exactly the sort of wrong-but-plausible number nobody notices until an SMS never
+arrives. Unlisted codes now resolve to `UNLISTED_COUNTRY`, whose empty dial prepends nothing. The
+check that found it lives with the verification run below, not in the repo: there is no test
+framework here and adding one for this was not in scope.
+
+**The square highlight was the global focus ring, not a hover style.** `:focus-visible` in
+`globals.css` draws a 2px outline on the focused element; our fields put the radius on a *wrapper*
+and the focused `input` inside has none, so the ring came out square across a rounded field. The
+input's `outline-none` looked like it should have prevented that and could not: Tailwind v4 puts
+utilities in `@layer utilities`, and unlayered CSS beats layered CSS regardless of specificity — so
+the fix had to be in `globals.css`. A `.field` class now hosts the ring on the wrapper. Verified on
+every field type: phone (with its prefix adornment), profile text and email, the bid amount, the
+country search — all now ring at 16px radius with the inner outline suppressed. The OTP boxes were
+never affected; they carry their own `rounded-2xl`, and an outline follows the radius of the element
+it is drawn on.
+
+**Keyboard submit: what it fixes, and where it is honestly redundant.** Wrapping the bid sheet's
+amount and confirm button in a form makes the action key place the bid — verified end to end: Enter
+fired one `POST /bids` with `amount_minor` at the server minimum and `max_amount_minor` at the typed
+ceiling, and the lot flipped to "You're winning this lot". With an amount below the minimum the
+browser refused to submit at all, because implicit submission is blocked when the default button is
+disabled — the guard and the keyboard path reinforce each other rather than fighting. On the **OTP
+screens the form is close to redundant**: the boxes already auto-submit on the last digit, and while
+the code is short the submit button is disabled, so Enter does nothing (measured: zero submit
+events). It is kept for the case where someone types the last digit and reaches for the key anyway,
+and because `enterKeyHint="go"` labels the key usefully either way. `Button` now defaults to
+`type="button"`, without which "Resend" inside the email-code form would have submitted it.
+
+**Undo across a mixed sequence**, verified by keyboard on a live auction, reading the top card at
+each step: start lot 3 → pass → 4 → skip → 5 → interested (sheet opened, dismissed) → 6, then three
+undos walked back 5, 4, 3 in exact reverse order, with the Undo button returning to disabled. The
+skip undo sends nothing and the lot returns to the front on its own. The down-drag was driven with
+real pointer events: with nothing to undo the top card stayed put and bounced; after a pass it
+brought the lot back. The "UNDO" drag hint is absent until there is something to undo.
+
 ## Backend surface adopted
 
 The backend was extended in response to the requests above, and the client workarounds they
