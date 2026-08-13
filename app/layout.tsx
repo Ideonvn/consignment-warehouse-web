@@ -27,9 +27,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   // `suppressHydrationWarning` on <html> is required: the pre-paint script sets
   // `data-theme` on it before React hydrates.
+  // No `h-full` on <html>: percentage heights resolve against the *large*
+  // viewport, which on mobile assumes the URL bar has collapsed. The stack sets
+  // `touch-none` on cards so it may never collapse, making the short viewport
+  // the permanent state — `dvh` measures what is actually visible.
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
-      <body className="min-h-full bg-bg text-text">
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-dvh bg-bg text-text">
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus:border focus:border-accent-edge focus:bg-accent focus:px-4 focus:py-2 focus:font-semibold focus:text-accent-ink"

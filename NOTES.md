@@ -222,6 +222,35 @@ through the admin API so that opens, closes and the anti-snipe window could be t
    open on it and take a recoverable 422. The lot is now refetched when a bid lands on a lot that is
    actually loaded, which costs one small request per bid on the screen being watched.
 
+### `resync_too_far` falsification run (carried since the realtime pass, now done)
+
+Reverted `store.noteSequence(...)` in the `resync_too_far` branch of `lib/realtime/events.ts` and
+drove the reverted build against the real backend, on `spring-collectables` lot 9 (255 bids, replay
+cap `WS_RESYNC_MAX_EVENTS=200`, so any resume point below ~55 is refused). The tracked sequence was
+forced to 1, and every reconnect was forced by closing the socket from the page.
+
+| | reverted | restored |
+|---|---|---|
+| resume point sent on each reconnect | `1`, `1`, `1` — never advances | `257` |
+| server reply | `resync_too_far` ×2 per reconnect, three rounds running | `resync_complete` ×2, zero refusals |
+| REST refetches caused | 2 per reconnect, indefinitely | 2 once, at the single genuine refusal |
+
+Non-terminating in the reverted build: three identical rounds, the tracked sequence pinned at 1.
+The line is load-bearing and stays.
+
+**It also corrected the reason.** I had written that the reverted code makes *every later bid* look
+like a fresh gap. It does not, and the run showed it: after the refused resync, the next bid
+produced **zero** further resyncs, because the `bid` branch calls `noteSequence` unconditionally
+right after asking for the replay, so a single bid event repairs the tracked position on its own.
+The leak is per *reconnect*, not per bid — nothing between reconnects repairs the resume point on a
+lot that is quiet, so a stale one is re-sent and re-refused for the life of the page, each round
+costing a full REST refetch. Worst on exactly the lots that can afford it least: a page left open on
+a slow connection. CLAUDE.md's wording is corrected to match.
+
+Both the revert and a temporary `window.__rt` hook (used to force the resume point without waiting
+for 200 real missed events) were removed afterwards; `git diff` on `lib/realtime/` is clean and the
+gate was re-run.
+
 ## M10 journey result
 
 Walked end to end against the complete backend (API + lifecycle worker, `make seed` applied) in a

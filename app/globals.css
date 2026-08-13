@@ -112,6 +112,12 @@
   color-scheme: dark;
   /* The stack is a phone-width column even on desktop. */
   --app-width: 28rem;
+  /* Bottom nav height, excluding the safe-area inset. Anything anchored above
+     the nav measures from this rather than repeating the number. */
+  --nav-h: 3.5rem;
+  /* Height reserved at the bottom of a stack card for the floating action row,
+     so the row never lands on the title, price or bid count. */
+  --stack-actions-h: 5.5rem;
 }
 
 html,

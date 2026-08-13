@@ -136,9 +136,11 @@ export function CardStack({
             skip(top);
           }
         }}
-        className="relative mx-auto w-full max-w-(--app-width) flex-1 px-4"
+        className="relative mx-auto flex w-full max-w-(--app-width) min-h-0 flex-1 flex-col px-4"
       >
-        <div className="relative h-[min(68dvh,34rem)] w-full">
+        {/* Photos are the point of this screen, so the card takes whatever is
+            left and shrinks when space is short — the buttons never do. */}
+        <div className="relative min-h-0 w-full flex-1 md:max-h-[34rem]">
           {top ? (
             <>
               {behind
@@ -189,8 +191,26 @@ export function CardStack({
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-(--app-width) px-4 py-4">
-        <div className="flex items-center justify-center gap-4">
+      {/* Anchored to the nav, not to the end of the content: on a short viewport
+          it overlaps the card's padded dead space rather than being pushed under
+          the nav. The scrim keeps it legible over a pale photograph. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--nav-h)+env(safe-area-inset-bottom))] z-20">
+        <div className="mx-auto w-full max-w-(--app-width) bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-10 pb-3">
+          <div className="pointer-events-auto relative flex items-center justify-center gap-5">
+            {/* Undo sits out of the centred group so the three targets keep
+                their spacing — crowding them is how someone passes on a lot they
+                meant to bid on. */}
+            <div className="absolute left-0">
+              <Button
+                variant="ghost"
+                aria-label="Undo the last swipe"
+                disabled={!stack.canUndo}
+                onClick={undo}
+              >
+                Undo
+              </Button>
+            </div>
+
           <Button
             variant="secondary"
             size="lg"
@@ -227,17 +247,7 @@ export function CardStack({
               <path d="M4 13l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Button>
-        </div>
-
-        <div className="mt-1 flex justify-center">
-          <Button
-            variant="ghost"
-            aria-label="Undo the last swipe"
-            disabled={!stack.canUndo}
-            onClick={undo}
-          >
-            Undo
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -254,7 +264,7 @@ export function CardStack({
 function StackSkeleton() {
   return (
     <div className="mx-auto w-full max-w-(--app-width) flex-1 px-4">
-      <Skeleton className="h-[min(68dvh,34rem)] w-full rounded-card" />
+      <Skeleton className="h-[60dvh] w-full rounded-card" />
       <div className="mt-5 flex justify-center gap-3">
         <Skeleton className="h-14 w-14 rounded-full" />
         <Skeleton className="h-11 w-20 rounded-full" />

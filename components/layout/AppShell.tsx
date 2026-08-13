@@ -12,7 +12,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AuthGuard>
       <RealtimeProvider>
-        <div className="flex min-h-dvh flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+        <div className="flex min-h-dvh flex-col pb-[calc(var(--nav-h)+env(safe-area-inset-bottom))]">
           <ConnectionBanner />
           {children}
         </div>

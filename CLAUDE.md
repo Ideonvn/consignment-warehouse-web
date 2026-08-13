@@ -78,10 +78,34 @@ puts a live "Place a bid" button on a dead lot.
 
 **`bids.sequence` is gap-free per lot.** Track the highest seen; reconnect with the per-lot
 `after_sequences` map so each lot resumes from its own position. On `resync_too_far` you **must**
-record `latest_sequence` before refetching — skip it and the tracked sequence stays stale, so every
-later bid looks like a fresh gap, asks for a resync, gets refused again, and thrashes for the life
-of the page while looking perfectly correct on screen. Replayed duplicates are dropped by sequence
-as a safety net; keep it.
+record `latest_sequence` before refetching — skip it and the resume point stays stale, so every
+reconnect asks to resume from the same refused position, gets refused again, and pays for a full
+REST refetch each time, for the life of the page and while looking perfectly correct on screen.
+Measured, by reverting it: three reconnects, three refusals, resume point pinned. It is *not* every
+subsequent bid that suffers — the `bid` branch notes the sequence unconditionally, so one bid event
+repairs the position on its own. That is why a quiet lot on a flapping connection is the worst case,
+not a busy one. Replayed duplicates are dropped by sequence as a safety net; keep it.
+
+**Full-height layouts use `dvh` — never `vh`, and never a percentage height against `<html>`.**
+Both of those resolve against the *large* viewport, the one that assumes the mobile URL bar has
+collapsed. The card stack sets `touch-none` so the browser can claim no scroll gesture, which means
+the bar may never collapse: the small viewport is the permanent state, and `h-full` on `<html>` had
+the shell sizing itself to a viewport the user never has. That is what pushed the swipe buttons
+under the bottom nav. Any new full-height screen inherits the same trap, so `min-h-dvh` on `<body>`
+is the baseline and nothing above it re-introduces `h-full`.
+
+Two tokens in `app/globals.css` hold that layout together, and they move in pairs:
+
+- `--nav-h` — the bottom nav's height. `AppShell` reserves it as page padding and `CardStack`'s
+  action row is `fixed` at `calc(var(--nav-h) + env(safe-area-inset-bottom))`. Change the nav's real
+  height without this token and the row lands on top of it.
+- `--stack-actions-h` — how much of the card the floating row may cover. `LotCardFace` pads its
+  content by exactly this, so the overlap only ever falls on dead space. **The price must never sit
+  under a button.** Make the row taller and this grows with it, or the number disappears.
+
+The card area is `min-h-0 flex-1`: when height is short the *card* shrinks, never the buttons, which
+stay at 56/48/56 px against a 44 px minimum. Verify any change to either token on a scheduled
+auction (the "bidding opens in…" banner costs the most height) at ~360×480.
 
 **A countdown reaching zero must trigger a refetch, not sit at zero.** Expiry changes what the
 user may do, but the status that says so is written by the lifecycle worker on its next tick — so

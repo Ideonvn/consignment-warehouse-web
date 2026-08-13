@@ -59,7 +59,10 @@ export function LotCardFace({
         </div>
       </div>
 
-      <div className="relative p-5 pt-0">
+      {/* The stack's action row floats over the bottom of this card, so the
+          content stops short of it — the price especially must never sit under
+          a button. */}
+      <div className="relative p-5 pt-0 pb-[var(--stack-actions-h)]">
         <h2 className="text-xl leading-tight font-semibold">{lot.title}</h2>
 
         <div className="mt-3 flex items-end justify-between gap-3">

@@ -70,7 +70,7 @@ export function AuctionStackScreen({ auctionId }: { auctionId: string }) {
         />
       ) : (
         <div className="mx-auto w-full max-w-(--app-width) px-4">
-          <Skeleton className="h-[min(68dvh,34rem)] w-full rounded-card" />
+          <Skeleton className="h-[60dvh] w-full rounded-card" />
         </div>
       )}
     </div>
