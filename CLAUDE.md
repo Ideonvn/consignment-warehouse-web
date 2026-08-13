@@ -173,8 +173,31 @@ interested swipe deletes the swipe server-side; **undoing a skip sends nothing**
 never anything but local: dropping it from the history stops the lot being sorted to the back, and
 it returns to the front on its own as the earliest lot still unresolved. With nothing to undo, the
 card bounces rather than silently absorbing the pull — a gesture that does nothing invisibly is one
-nobody discovers. The "UNDO" drag hint appears only when there is something to bring back, and the
-Undo button stays: the gesture is an addition, never a replacement.
+nobody discovers, and the hint says "Nothing to undo" instead of promising one. The Undo button
+stays: the gesture is an addition, never a replacement.
+
+**The drag hint is the only thing telling someone what a release will do, so it is built like it.**
+One label, centred on the card and leaning up to 44px toward the direction of travel — not pinned to
+the corner the card is heading for, which is exactly where it leaves the screen. It lives inside the
+card and cancels the card's own transform (a point at the centre of a rotating box doesn't move, so
+undoing `x` and `y` pins it, and a counter-rotation keeps the words level — measured at 0.00° while
+the card sits at ±9°).
+
+**Two states, one language for all four gestures**: *pending* is an outline in the gesture's colour,
+*armed* is that colour filled with a thicker border and a small pop, and armed means "release now and
+this commits" — `COMMIT_DISTANCE` sideways, `SKIP_DISTANCE` vertically. Colour alone is never the
+signal; the border weight and fill carry it too. Pass is danger, bid is accent, skip is muted, undo
+is `--undo`. The label always sits on an **opaque** background because it is read over user
+photography of unknown brightness.
+
+**The hint must agree with what the release actually does.** The commit check follows
+`dragDirectionLock`'s axis and the hint reads the same rule. The flick shortcut also requires the
+velocity to agree in sign with the offset: taking speed alone let a fast yank back to centre commit
+the *opposite* gesture, so a card that read "BID" could pass the lot.
+
+**Reduced motion drops the animation, not the information.** `prefers-reduced-motion` used to hide
+these labels entirely, which removed the only signal of what a gesture would do from the people most
+likely to need it. Both states still show; only the fade-in and the scale pop are dropped.
 
 Every gesture has three ways in: the drag, a button, and an arrow key (←, →, ↑, ↓).
 
@@ -205,6 +228,14 @@ are three accent tokens, and which one you reach for depends on how the colour i
 | `--accent` | brand **fills** (buttons, selected tab, logo) | `#E8FF5A` | `#E8FF5A` — unchanged |
 | `--accent-text` | accent as **text**, and thin marks that must be seen (focus rings, live dot, toast bar, gallery dot) | `#E8FF5A` | `#5C6B00` — darkened same hue |
 | `--accent-edge` | border on a brand fill | `transparent` | `#5C6B00` |
+| `--undo` | the undo gesture's own hue | `#7DD3FC` | `#0A6A9E` |
+| `--on-fill` | ink on a filled swipe hint | `#0A0A0B` | `#FFFFFF` |
+
+`--undo` is a hue of its own rather than a reuse of `--success`: green already means *winning* here,
+and a swipe hint is not a result. `--on-fill` exists because the relationship inverts between
+themes — every hint fill is a light colour on dark and a dark one on light — so one token per theme
+covers all four gestures. The lime is the exception and keeps `--accent-ink`, because it stays lime
+in both.
 
 `--accent-edge` is why the lime button still reads as a button on white: the fill itself is only
 1.11:1 against a white card, which fails the 3:1 needed for a non-text boundary, so light gives it
@@ -224,6 +255,8 @@ Measured ratios (WCAG AA: 4.5:1 body text, 3:1 large text and non-text boundarie
 | danger on bg / surface / tint | 6.5 / 6.0 / 5.4 | 6.0 / 6.6 / 5.6 |
 | success on bg / surface / tint | 11.4 / 10.6 / 8.8 | 6.7 / 7.3 / 6.3 |
 | accent fill vs surface (button edge) | 16.5 | 1.11 -> `--accent-edge` at 5.9 |
+| pending hint text on its surface (pass / bid / skip / undo) | 6.0 / 16.5 / 6.6 / 11.0 | 6.6 / 5.9 / 6.4 / 5.9 |
+| armed hint ink on its fill (pass / bid / skip / undo) | 6.5 / 17.8 / 7.1 / 11.9 | 6.6 / 17.8 / 6.4 / 5.9 |
 | input border vs its fill | 1.16 (see below) | 3.12 |
 
 Two were caught by measuring and fixed before shipping: light `success` at `#15803D` scored 4.38 on

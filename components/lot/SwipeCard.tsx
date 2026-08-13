@@ -1,8 +1,16 @@
 "use client";
 
-import { useRef } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
+import { useRef, useState } from "react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+  useTransform,
+} from "framer-motion";
 import { LotCardFace } from "@/components/lot/LotCardFace";
+import { cn } from "@/lib/utils/cn";
 import type { LotCard, SwipeDirection } from "@/types/api";
 
 /** Past this much horizontal travel, releasing commits the swipe. */
@@ -16,8 +24,44 @@ const COMMIT_VELOCITY = 550;
 const SKIP_DISTANCE = 150;
 const SKIP_VELOCITY = 700;
 
+/** How far a drag must travel before the hint says anything at all. */
+const HINT_DISTANCE = 24;
+
 /** What sent the card away — drives the exit animation via AnimatePresence. */
 export type CardExit = SwipeDirection | "skip";
+
+type HintKind = "pass" | "bid" | "skip" | "undo" | "nothing-to-undo";
+type Hint = { kind: HintKind; armed: boolean };
+
+/**
+ * One visual language for all four gestures: an outline while the pull is
+ * *pending*, the same colour filled once it is *armed* and would commit on
+ * release. Both states sit on an opaque background, because these are read over
+ * user photography of unknown brightness.
+ */
+const TONES: Record<HintKind, { pending: string; armed: string }> = {
+  pass: {
+    pending: "border-danger text-danger",
+    armed: "border-danger bg-danger text-on-fill",
+  },
+  bid: {
+    pending: "border-accent-text text-accent-text",
+    armed: "border-accent-edge bg-accent text-accent-ink",
+  },
+  skip: {
+    pending: "border-text-muted text-text-muted",
+    armed: "border-text-muted bg-text-muted text-on-fill",
+  },
+  undo: {
+    pending: "border-undo text-undo",
+    armed: "border-undo bg-undo text-on-fill",
+  },
+  // Never arms: there is nothing behind this pull, and the card bounces instead.
+  "nothing-to-undo": {
+    pending: "border-border text-text-muted",
+    armed: "border-border text-text-muted",
+  },
+};
 
 export function SwipeCard({
   lot,
@@ -44,13 +88,63 @@ export function SwipeCard({
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const dragged = useRef(false);
+  const dragging = useRef(false);
 
   // Rotation is proportional to offset so the card feels hinged to the thumb.
   const rotate = useTransform(x, [-240, 240], [-13, 13]);
-  const passOpacity = useTransform(x, [-COMMIT_DISTANCE, -24], [1, 0]);
-  const bidOpacity = useTransform(x, [24, COMMIT_DISTANCE], [0, 1]);
-  const skipOpacity = useTransform(y, [-SKIP_DISTANCE, -32], [1, 0]);
-  const undoOpacity = useTransform(y, [32, SKIP_DISTANCE], [0, 1]);
+
+  /*
+   * The hint lives inside the card so it can sit at the card's centre, and then
+   * undoes the card's own transform: the counter-translate keeps it where the
+   * eye already is instead of riding off-screen with the card, and the
+   * counter-rotate keeps the words level while the card tilts. A point at the
+   * centre of a rotating box doesn't move, so cancelling x and y is enough to
+   * pin it. What remains is a small lean in the direction of travel, which is
+   * what makes the *direction* readable without chasing the card.
+   */
+  const lean = (value: number) => Math.max(-44, Math.min(44, value * 0.2));
+  const hintX = useTransform(x, (value) => -value + lean(value));
+  const hintY = useTransform(y, (value) => -value + lean(value));
+  const hintRotate = useTransform(rotate, (value) => -value);
+
+  const [hint, setHint] = useState<Hint | null>(null);
+
+  const readHint = () => {
+    const dx = x.get();
+    const dy = y.get();
+
+    // `dragDirectionLock` picks one axis; the hint follows the same choice so it
+    // can never contradict what the release will actually do.
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      if (Math.abs(dx) < HINT_DISTANCE) return null;
+      return {
+        kind: dx > 0 ? ("bid" as const) : ("pass" as const),
+        armed: Math.abs(dx) > COMMIT_DISTANCE,
+      };
+    }
+    if (Math.abs(dy) < HINT_DISTANCE) return null;
+    if (dy < 0) return { kind: "skip" as const, armed: -dy > SKIP_DISTANCE };
+    if (!canUndo) return { kind: "nothing-to-undo" as const, armed: false };
+    return { kind: "undo" as const, armed: dy > SKIP_DISTANCE };
+  };
+
+  const syncHint = () => {
+    // Only while a finger is actually on the card. Without this the exit
+    // animation — which drives x out to ±700 — re-armed the hint and left it
+    // hanging in the middle of the screen after the card had gone.
+    if (!dragging.current) return;
+    const next = readHint();
+    setHint((current) => {
+      if (current === null && next === null) return current;
+      if (current && next && current.kind === next.kind && current.armed === next.armed) {
+        return current;
+      }
+      return next;
+    });
+  };
+
+  useMotionValueEvent(x, "change", syncHint);
+  useMotionValueEvent(y, "change", syncHint);
 
   return (
     <motion.div
@@ -71,15 +165,26 @@ export function SwipeCard({
       }}
       onDragStart={() => {
         dragged.current = true;
+        dragging.current = true;
       }}
       onDragEnd={(_, info) => {
+        dragging.current = false;
+        setHint(null);
         // `dragDirectionLock` already committed to one axis; follow it rather
         // than letting a mostly-sideways drag also count as a skip.
         if (Math.abs(info.offset.x) >= Math.abs(info.offset.y)) {
-          const committed =
-            Math.abs(info.offset.x) > COMMIT_DISTANCE ||
-            Math.abs(info.velocity.x) > COMMIT_VELOCITY;
-          if (committed) onDecide(info.offset.x > 0 ? "interested" : "pass");
+          // The flick check has to agree in sign with the pull. Taking velocity
+          // on its own let a fast yank *back* to centre commit — offset near
+          // zero, speed high — and the direction then came from whichever side
+          // of centre the thumb happened to land on. Pulling right and changing
+          // your mind could pass the lot, which is the one thing a hint that
+          // says "BID" must never do.
+          const flicked =
+            Math.abs(info.velocity.x) > COMMIT_VELOCITY &&
+            Math.sign(info.velocity.x) === Math.sign(info.offset.x);
+          if (Math.abs(info.offset.x) > COMMIT_DISTANCE || flicked) {
+            onDecide(info.offset.x > 0 ? "interested" : "pass");
+          }
           return;
         }
 
@@ -139,37 +244,40 @@ export function SwipeCard({
         <LotCardFace lot={lot} currency={currency} priority />
       </button>
 
-      <motion.div
+      {/* Centred, level and opaque — see the transform note above. Rendering
+          nothing until the drag is meaningful keeps the card readable. */}
+      <div
         aria-hidden
-        style={{ opacity: reduceMotion ? 0 : passOpacity }}
-        className="pointer-events-none absolute top-8 left-6 -rotate-12 rounded-xl border-2 border-danger px-4 py-2 text-lg font-bold tracking-widest text-danger uppercase"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
-        Pass
-      </motion.div>
-      <motion.div
-        aria-hidden
-        style={{ opacity: reduceMotion ? 0 : bidOpacity }}
-        className="pointer-events-none absolute top-8 right-6 rotate-12 rounded-xl border-2 border-accent-text bg-accent/10 px-4 py-2 text-lg font-bold tracking-widest text-accent-text uppercase"
-      >
-        {bidLabel}
-      </motion.div>
-      <motion.div
-        aria-hidden
-        style={{ opacity: reduceMotion ? 0 : skipOpacity }}
-        className="pointer-events-none absolute inset-x-0 top-4 mx-auto w-fit rounded-xl border-2 border-text-muted px-4 py-2 text-lg font-bold tracking-widest text-text-muted uppercase"
-      >
-        Skip
-      </motion.div>
-      {/* Only promised when there is something to bring back. */}
-      {canUndo ? (
-        <motion.div
-          aria-hidden
-          style={{ opacity: reduceMotion ? 0 : undoOpacity }}
-          className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto w-fit rounded-xl border-2 border-text-muted px-4 py-2 text-lg font-bold tracking-widest text-text-muted uppercase"
-        >
-          Undo
-        </motion.div>
-      ) : null}
+        {hint ? (
+          <motion.div
+            style={{ x: hintX, y: hintY, rotate: hintRotate }}
+            initial={reduceMotion ? false : { scale: 0.92, opacity: 0 }}
+            animate={{ scale: hint.armed && !reduceMotion ? 1.06 : 1, opacity: 1 }}
+            transition={
+              reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 26 }
+            }
+            className={cn(
+              "rounded-2xl border-2 bg-surface px-5 py-2.5 text-2xl font-bold tracking-widest uppercase shadow-lg shadow-black/40",
+              hint.armed ? TONES[hint.kind].armed : TONES[hint.kind].pending,
+              // Armed is meant to read at a glance, so the border thickens as
+              // well as filling — colour alone is not a signal everyone gets.
+              hint.armed && "border-4",
+            )}
+          >
+            {hint.kind === "pass"
+              ? "Pass"
+              : hint.kind === "bid"
+                ? bidLabel
+                : hint.kind === "skip"
+                  ? "Skip"
+                  : hint.kind === "undo"
+                    ? "Undo"
+                    : "Nothing to undo"}
+          </motion.div>
+        ) : null}
+      </div>
     </motion.div>
   );
 }

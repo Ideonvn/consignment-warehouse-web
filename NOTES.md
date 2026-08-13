@@ -209,6 +209,44 @@ skip undo sends nothing and the lot returns to the front on its own. The down-dr
 real pointer events: with nothing to undo the top card stayed put and bounced; after a pass it
 brought the lot back. The "UNDO" drag hint is absent until there is something to undo.
 
+## Swipe hints: placement, threshold and reduced motion
+
+The labels were pinned to `top-8 left-6` / `right-6` on the side the card travels toward, so they
+left the viewport exactly when they were being read, and they inherited the card's rotation on top
+of their own tilt. Replaced with one centred label that cancels the card's transform: a point at the
+centre of a rotating box does not move, so undoing `x`/`y` pins it and a counter-rotation keeps it
+level. **Measured**: composed screen angle 0.00° while the card sat at −3.79°, −8.94° and +9.48°.
+(My first check used bounding-rect width as a tilt proxy and reported 5–7px of tilt on the armed
+states — that was the 1.06 scale, not rotation. Composing the ancestor matrices is what actually
+answers the question.)
+
+**Threshold made visible**, in one language for all four gestures: pending is an outline in the
+gesture's colour at 2px, armed is the same colour filled at 4px with a small scale pop. Two new
+tokens: `--undo` (green was the obvious reuse and is wrong — green means *winning* in this app) and
+`--on-fill`, which exists because the fills are light on dark and dark on light, so the ink flips
+per theme rather than per gesture. Measured, worst case 5.89:1 in light and 6.01:1 in dark; the full
+table is in CLAUDE.md.
+
+**Legibility over photography** was tested at the extremes rather than on a typical image: the card
+forced to flat white and to flat black, plus a light-theme capture over a saturated brown photo. The
+label carries its own opaque background, so the backdrop only affects the surround.
+
+**A bug the drag testing exposed.** Committing used `Math.abs(info.velocity.x) > COMMIT_VELOCITY` on
+its own, with the direction taken from `info.offset.x`. Pulling one way and yanking quickly back to
+centre therefore committed — offset near zero, speed high — in whichever direction the thumb
+happened to land. A card reading "BID" could pass the lot. The flick now also requires the velocity
+to agree in sign with the offset. Found because the test harness returned the pointer to the origin
+quickly before releasing, which is exactly what a person changing their mind does.
+
+**Reduced motion showed nothing at all.** `opacity: reduceMotion ? 0 : …` hid the labels outright,
+removing the only signal of what a gesture would do from the users most likely to need it. Both
+states now render under `prefers-reduced-motion`; what is dropped is the progressive fade and the
+scale pop. Verified with the media feature emulated: pending and armed both at opacity 1, level,
+scale pinned at 1.
+
+**Not covered:** no seeded lot in the auctions I drove has an empty `primary_image_url`, so the
+placeholder case was simulated by hiding the image rather than found in the data.
+
 ## Backend surface adopted
 
 The backend was extended in response to the requests above, and the client workarounds they

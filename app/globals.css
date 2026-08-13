@@ -31,6 +31,13 @@
   --border-strong: #2a2a2e;
   --danger: #ff5a5a;
   --success: #4ade80;
+  /* Undo's own hue. Green was the obvious reuse and is wrong here: in this app
+     green already means *winning*, and a swipe hint is not a result. */
+  --undo: #7dd3fc;
+  /* Ink for text sitting on a filled swipe hint. Every fill is a light colour on
+     dark, so one near-black reading covers all of them — except the lime, which
+     keeps `--accent-ink` because it stays lime in both themes. */
+  --on-fill: #0a0a0b;
 }
 
 /*
@@ -58,6 +65,9 @@
   --accent-edge: #5c6b00;
   --danger: #b42318;
   --success: #146b33;
+  /* Light inverts the relationship: the fills are dark, so the ink is white. */
+  --undo: #0a6a9e;
+  --on-fill: #ffffff;
 }
 
 @theme inline {
@@ -74,6 +84,8 @@
   --color-accent-text: var(--accent-text);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-undo: var(--undo);
+  --color-on-fill: var(--on-fill);
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
