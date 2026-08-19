@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored; this file is not.
+# Nothing here is secret — every NEXT_PUBLIC_* value is compiled into the browser bundle
+# and readable by anyone using the app. The one credential, the GitHub token, is better
+# passed as TF_VAR_github_access_token than written to a file.
+
+# Amplify Hosting is not available in af-south-1. See README.md → Region.
+aws_region  = "eu-west-1"
+environment = "prod"
+app_name    = "consignment-warehouse-web"
+
+repository_url   = "https://github.com/your-org/consignment-warehouse-web"
+main_branch_name = "main"
+
+# The app must share a registrable domain with the API or sessions die on reload.
+# README.md → Domains explains why this is not optional.
+domain_name      = "consignmentwarehouse.co.za"
+subdomain_prefix = "bid"
+
+# Production API. https/wss — the validations reject anything else, because a plain-http
+# call from an https page is blocked as mixed content and the failure is silent.
+api_base_url = "https://api.consignmentwarehouse.co.za/api/v1"
+ws_url       = "wss://api.consignmentwarehouse.co.za/api/v1/ws"
+
+# The operator's own wording, shown wherever the app asks for money. Left empty, the app
+# falls back to an honest "contact the warehouse" line rather than invented bank details.
+payment_instructions = "EFT to Consignment Warehouse, Standard Bank, acct 000 000 000, branch 051001. Use your payment reference so we can match it. Questions: WhatsApp 082 000 0000."
+
+# Previews inherit the production API, so a branch build would place real bids.
+enable_auto_branch_creation = false
+enable_webhook              = false
+
+# NOTE: there is deliberately no NEXT_PUBLIC_OTP_CODE_LENGTH setting, and the module
+# refuses one. Production OTPs are six digits and the app already defaults to six; a 4
+# here renders four boxes for a six-digit code and nobody can sign in.

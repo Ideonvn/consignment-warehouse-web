@@ -1,0 +1,31 @@
+# Amplify Hosting build for the bidder web app.
+#
+# The same gate that runs locally runs here, in the same order: types, lint, build. Each
+# command's exit status fails the build — Amplify stops the phase on the first non-zero
+# exit — so a type error or a lint error cannot reach production just because the bundle
+# happened to compile. That is the whole point of running them here rather than trusting
+# that someone ran them before pushing.
+#
+# `npm ci` rather than `npm install`: the lockfile is the build's input, and `install`
+# would be free to resolve a newer transitive dependency than the one that was tested.
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci --cache .npm --prefer-offline
+    build:
+      commands:
+        - npx tsc --noEmit
+        - npm run lint
+        - npm run build
+  artifacts:
+    # `.next` for a WEB_COMPUTE app: Amplify reads the standalone server output from here
+    # and runs the server-rendered routes itself.
+    baseDirectory: .next
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - .next/cache/**/*
+      - .npm/**/*

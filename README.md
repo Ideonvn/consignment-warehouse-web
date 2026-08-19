@@ -39,8 +39,12 @@ does not infer a country from a local `082…` format.
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | REST base URL, no trailing slash | `http://localhost:8000/api/v1` |
 | `NEXT_PUBLIC_WS_URL` | WebSocket endpoint for live bid events | `ws://localhost:8000/api/v1/ws` |
+| `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS` | How to pay, in the operator's words | unset — falls back to "contact the warehouse" |
+| `NEXT_PUBLIC_OTP_CODE_LENGTH` | Digits in the code inputs. **Local only** | `4`, because the local backend's dev code is `0000` |
 
-Both are documented in `.env.example`.
+All four are documented in `.env.example`. In production the first three are set in Amplify and the
+fourth **must not be**: production issues six-digit codes and the app already defaults to six, so a
+`4` would draw four boxes for a six-digit code and nobody could sign in.
 
 ## Scripts
 
@@ -80,3 +84,42 @@ on every response — so a device with a wrong clock never sees a wrong closing 
 
 `NOTES.md` records the judgement calls, the things the API made awkward, and the end-to-end
 verification run.
+
+## Deployment
+
+AWS Amplify Hosting, described in `terraform/`. Read `terraform/README.md` before the first apply —
+it covers the region choice, the state bucket bootstrap, and the two things below that decide
+whether a deployed build actually works.
+
+### The production origin, for the API's CORS list
+
+```
+https://bid.consignmentwarehouse.co.za
+```
+
+Add it to `CORS_ALLOWED_ORIGINS` in the API. Every request from this app sends
+`credentials: "include"`, so the API must also keep `Access-Control-Allow-Credentials: true` with a
+non-wildcard origin. Missing from the list, the app fails in the browser while `curl` against the
+same API keeps working — the failure is a CORS error in the console, not an API error.
+
+`terraform output cors_origin` prints the value actually deployed, which is the one to use if the
+domain differs from the example above.
+
+### The API and this app must be same-site
+
+The refresh token is an **HttpOnly cookie set by the API**, with `SameSite=Lax`. "Site" means the
+registrable domain, so this is a constraint on the domain layout, not a preference:
+
+```
+bid.consignmentwarehouse.co.za     this app
+api.consignmentwarehouse.co.za     the API
+```
+
+Same registrable domain, so the browser treats the refresh call as same-site and sends the cookie.
+The access token lives only in memory, so **every reload depends on that one call** — get this wrong
+and users are silently signed out whenever they refresh the page, while everything else looks fine.
+
+This rules out Amplify's default domain for anything but a smoke test: `*.amplifyapp.com` is on the
+public suffix list, which makes each app its own site and the cookie cross-site. It is the same
+failure already documented for LAN testing, where the app on a machine IP and the API on `localhost`
+could not share a session. A custom domain is therefore part of getting this working, not a finish.
