@@ -39,7 +39,13 @@ frontend:
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
-        - npx tsc --noEmit
+        # `npm run typecheck`, not a bare `tsc --noEmit`: the script also runs
+        # `next typegen`, which writes the generated route types (`PageProps`,
+        # `LayoutProps`, `RouteContext`) that tsconfig.json includes from `.next/types`.
+        # A laptop has them lying around from an earlier `next dev`; a clean checkout
+        # never has, which is how this passed locally and failed here. Calling the script
+        # is also what keeps the two ends honest — if the gate changes, it changes once.
+        - npm run typecheck
         - npm run lint
         - npm run build
   artifacts:
