@@ -23,7 +23,7 @@ variable "main_branch_name" {
 
 variable "domain_name" {
   description = <<-EOT
-    Registrable domain the app is served from, e.g. "consignmentwarehouse.co.za".
+    Registrable domain the app is served from, e.g. "consignment-warehouse.com".
     Empty means no custom domain, which is NOT a viable production setup — the API's
     refresh cookie is SameSite=Lax, so an *.amplifyapp.com origin is cross-site to the
     API and the session dies on reload. See README.md → Domains.
@@ -33,9 +33,14 @@ variable "domain_name" {
 }
 
 variable "subdomain_prefix" {
-  description = "Host under `domain_name` for this app, e.g. \"bid\". Empty serves the apex."
+  description = <<-EOT
+    Host under `domain_name` for this app. **Empty serves the apex**, which is what this
+    app does: https://consignment-warehouse.com, no bid. and no www. An empty string is
+    what the AWS provider documents for an apex `sub_domain` block, not a special case
+    this module works around.
+  EOT
   type        = string
-  default     = "bid"
+  default     = ""
 }
 
 variable "environment_variables" {

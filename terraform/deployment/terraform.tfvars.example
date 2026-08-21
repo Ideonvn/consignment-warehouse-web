@@ -1,29 +1,42 @@
 # Copy to terraform.tfvars and edit. terraform.tfvars is gitignored; this file is not.
-# Nothing here is secret — every NEXT_PUBLIC_* value is compiled into the browser bundle
-# and readable by anyone using the app. The one credential, the GitHub token, is better
-# passed as TF_VAR_github_access_token than written to a file.
+#
+# Nothing here may be secret. Every NEXT_PUBLIC_* value is compiled into the browser
+# bundle and readable by anyone using the app, and Terraform keeps variable values in
+# state. The GitHub token, if you use one at all, belongs in TF_VAR_github_access_token
+# for a single apply — see README.md → Connecting the repository.
 
-# Amplify Hosting is not available in af-south-1. See README.md → Region.
+# Account 982055099067. Amplify Hosting is not offered in af-south-1, where the API runs;
+# eu-west-1 is the closest well-connected supported region. See README.md → Region.
 aws_region  = "eu-west-1"
 environment = "prod"
 app_name    = "consignment-warehouse-web"
 
-repository_url   = "https://github.com/your-org/consignment-warehouse-web"
+# Casing is GitHub's own, from `git remote -v`. The repository is private, so Amplify
+# needs a connection before it can clone or receive pushes — README.md → Connecting the
+# repository covers both routes and what each one costs.
+repository_url   = "https://github.com/Ideonvn/consignment-warehouse-web"
 main_branch_name = "main"
 
-# The app must share a registrable domain with the API or sessions die on reload.
-# README.md → Domains explains why this is not optional.
-domain_name      = "consignmentwarehouse.co.za"
-subdomain_prefix = "bid"
+# The app is served from the APEX: https://consignment-warehouse.com. No bid., no www.
+# An empty prefix is what the AWS provider expects for an apex association.
+#
+# The apex is also why the hosted zone was moved to Route 53: a CNAME is invalid at a zone
+# apex, so this would otherwise need ANAME/ALIAS support from the DNS provider. See
+# README.md → DNS and the apex.
+domain_name      = "consignment-warehouse.com"
+subdomain_prefix = ""
 
-# Production API. https/wss — the validations reject anything else, because a plain-http
-# call from an https page is blocked as mixed content and the failure is silent.
-api_base_url = "https://api.consignmentwarehouse.co.za/api/v1"
-ws_url       = "wss://api.consignmentwarehouse.co.za/api/v1/ws"
+# The live API, same registrable domain as this app so the refresh cookie survives.
+# https/wss are enforced by variable validation: a plain-http or ws:// call from an https
+# page is blocked as mixed content, and the live bid layer then silently never connects.
+api_base_url = "https://api.consignment-warehouse.com/api/v1"
+ws_url       = "wss://api.consignment-warehouse.com/api/v1/ws"
 
-# The operator's own wording, shown wherever the app asks for money. Left empty, the app
-# falls back to an honest "contact the warehouse" line rather than invented bank details.
-payment_instructions = "EFT to Consignment Warehouse, Standard Bank, acct 000 000 000, branch 051001. Use your payment reference so we can match it. Questions: WhatsApp 082 000 0000."
+# PLACEHOLDER — replace in terraform.tfvars, which is gitignored, and nowhere else.
+# Real banking details must not land in a tracked file. Left empty, the app falls back to
+# an honest "contact the warehouse" line rather than inventing details, which is a worse
+# outcome than the real wording but a safe one.
+payment_instructions = "REPLACE ME — bank, account number, branch code, and a note to quote the payment reference."
 
 # Previews inherit the production API, so a branch build would place real bids.
 enable_auto_branch_creation = false

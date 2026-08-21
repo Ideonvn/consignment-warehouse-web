@@ -45,17 +45,18 @@ variable "main_branch_name" {
 
 variable "domain_name" {
   description = <<-EOT
-    Registrable domain shared with the API. Required in practice — see README.md →
-    Domains for why an *.amplifyapp.com origin cannot hold a session.
+    Registrable domain shared with the API: "consignment-warehouse.com". Required in
+    practice — see README.md → Domains for why an *.amplifyapp.com origin cannot hold a
+    session.
   EOT
   type        = string
   default     = ""
 }
 
 variable "subdomain_prefix" {
-  description = "Host for this app under `domain_name`."
+  description = "Host for this app under `domain_name`. Empty serves the apex, which is what this app does."
   type        = string
-  default     = "bid"
+  default     = ""
 }
 
 variable "api_base_url" {

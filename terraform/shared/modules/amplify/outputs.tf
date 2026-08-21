@@ -26,7 +26,13 @@ output "role_arn" {
 }
 
 output "domain_verification_records" {
-  description = "DNS records that must exist for the custom domain's certificate to validate. Empty when no custom domain is configured."
+  description = <<-EOT
+    INFORMATIONAL — nobody needs to create these. The hosted zone is in Route 53 in this
+    account, so Amplify writes the verification record itself. This is here for reading
+    when a domain association is stuck, so you can check what Amplify expects against
+    what is actually in the zone. Creating these by hand would put a second manager on
+    records Amplify owns. Empty when no custom domain is configured.
+  EOT
   value       = var.domain_name != "" ? aws_amplify_domain_association.this[0].certificate_verification_dns_record : null
 }
 

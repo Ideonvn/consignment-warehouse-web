@@ -48,6 +48,12 @@ resource "aws_amplify_branch" "main" {
  * not survive a reload. `*.amplifyapp.com` is on the public suffix list, which makes
  * the default Amplify domain its own site and therefore unusable for a signed-in
  * session. See README.md → Domains.
+ *
+ * DNS is a Route 53 hosted zone in this same account, so **Amplify writes the records
+ * itself** — both the certificate verification record and the records that point the
+ * domain at the app. Nobody copies anything into a control panel, and this module
+ * deliberately declares no `aws_route53_record`: two managers of the same names is a
+ * fight, and the zone belongs to the API's account footprint. See README.md → DNS.
  */
 resource "aws_amplify_domain_association" "this" {
   count = var.domain_name != "" ? 1 : 0
@@ -55,11 +61,14 @@ resource "aws_amplify_domain_association" "this" {
   app_id      = aws_amplify_app.this.id
   domain_name = var.domain_name
 
-  # Amplify issues and renews the certificate; DNS records have to exist for the
-  # validation to complete. If the zone is not in this account, create them by hand
-  # from the association's `certificate_verification_dns_record`.
+  # Certificate issuance and DNS propagation can take hours, and none of it needs
+  # Terraform present. Waiting would only hold the apply open on AWS's own timing.
   wait_for_verification = false
 
+  # An empty prefix is the apex — `https://consignment-warehouse.com` — and is exactly
+  # what the AWS provider's own example uses for a root domain, alongside a "www" block
+  # for the subdomain. This app has no www: one origin, which is also the one string the
+  # API's CORS allowlist has to match.
   sub_domain {
     branch_name = aws_amplify_branch.main.branch_name
     prefix      = var.subdomain_prefix

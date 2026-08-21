@@ -19,7 +19,7 @@ output "cors_origin" {
 }
 
 output "domain_verification_records" {
-  description = "DNS records the custom domain's certificate needs before it validates."
+  description = "INFORMATIONAL. Amplify writes this record itself into the Route 53 zone; read it only when diagnosing a stuck domain association."
   value       = module.web.domain_verification_records
 }
 

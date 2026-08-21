@@ -94,13 +94,17 @@ whether a deployed build actually works.
 ### The production origin, for the API's CORS list
 
 ```
-https://bid.consignmentwarehouse.co.za
+https://consignment-warehouse.com
 ```
 
-Add it to `CORS_ALLOWED_ORIGINS` in the API. Every request from this app sends
-`credentials: "include"`, so the API must also keep `Access-Control-Allow-Credentials: true` with a
-non-wildcard origin. Missing from the list, the app fails in the browser while `curl` against the
-same API keeps working — the failure is a CORS error in the console, not an API error.
+The **apex** — no `www`, no `bid.`. The API's allowlist already carries this and
+`https://admin.consignment-warehouse.com`.
+
+It must appear in `CORS_ALLOWED_ORIGINS` on the API, matched **exactly** and with no trailing slash.
+Every request from this app sends `credentials: "include"`, so the API must also keep
+`Access-Control-Allow-Credentials: true` with a non-wildcard origin. Missing or mismatched, the
+preflight comes back as a bare `400`, which the browser reports as a network failure rather than a
+CORS error — so it reads as "the API is down" while `curl` against the same API keeps working.
 
 `terraform output cors_origin` prints the value actually deployed, which is the one to use if the
 domain differs from the example above.
@@ -111,8 +115,9 @@ The refresh token is an **HttpOnly cookie set by the API**, with `SameSite=Lax`.
 registrable domain, so this is a constraint on the domain layout, not a preference:
 
 ```
-bid.consignmentwarehouse.co.za     this app
-api.consignmentwarehouse.co.za     the API
+consignment-warehouse.com          this app
+api.consignment-warehouse.com      the API
+admin.consignment-warehouse.com    the admin portal
 ```
 
 Same registrable domain, so the browser treats the refresh call as same-site and sends the cookie.
