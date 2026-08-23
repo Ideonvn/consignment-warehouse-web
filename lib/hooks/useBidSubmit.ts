@@ -30,7 +30,12 @@ type SubmitInput = {
   lotId: string;
   /** The visible bid — always the server's minimum, never their ceiling. */
   amountMinor: number;
-  maxAmountMinor: number;
+  /**
+   * The user's ceiling, or null for a bid with no headroom — a one-tap swipe bids
+   * exactly the server's minimum. The backend treats an absent maximum as "the
+   * bid is the maximum", so omitting it is how "no proxy" is expressed.
+   */
+  maxAmountMinor: number | null;
   /** Reused across retries of the same intent so a double tap can't bid twice. */
   clientRequestId: string;
   /** Set when they already have a proxy on this lot: raising is its own call. */
@@ -47,12 +52,16 @@ export function useBidSubmit() {
       try {
         const result = input.isRaise
           ? await setAutoBid(input.lotId, {
-              max_amount_minor: input.maxAmountMinor,
+              // A raise is a maximum by definition: `PUT /auto-bid` has nothing to
+              // send without one, so this path never takes the no-headroom case.
+              max_amount_minor: input.maxAmountMinor ?? input.amountMinor,
               client_request_id: input.clientRequestId,
             })
           : await placeBid(input.lotId, {
               amount_minor: input.amountMinor,
-              max_amount_minor: input.maxAmountMinor,
+              ...(input.maxAmountMinor === null
+                ? {}
+                : { max_amount_minor: input.maxAmountMinor }),
               client_request_id: input.clientRequestId,
             });
 

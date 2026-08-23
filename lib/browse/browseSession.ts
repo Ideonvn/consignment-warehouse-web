@@ -9,7 +9,18 @@ import type { SwipeDirection } from "@/types/api";
  * bring the skip back first, not the pass.
  */
 export type BrowseAction =
-  | { kind: "decision"; lotId: string; direction: SwipeDirection }
+  | {
+      kind: "decision";
+      lotId: string;
+      direction: SwipeDirection;
+      /**
+       * Set once a one-tap bid on this lot has actually been sent. Undo can still
+       * take the swipe back — it cannot take the bid back, because there is no
+       * retraction API — so this is what lets the wording say so instead of
+       * implying the money came home.
+       */
+      bidPlaced?: boolean;
+    }
   | { kind: "skip"; lotId: string };
 
 /**
@@ -47,6 +58,7 @@ type BrowseSessionState = {
   restore: (auctionId: string, action: BrowseAction) => void;
   /** Remove a decision that failed to save, wherever it sits. */
   dropDecision: (auctionId: string, lotId: string) => void;
+  markBidPlaced: (auctionId: string, lotId: string) => void;
   setAnchor: (auctionId: string, lotNumber: number | null) => void;
   setGalleryAnchor: (auctionId: string, anchor: GalleryAnchor | null) => void;
   clearAll: () => void;
@@ -111,6 +123,24 @@ export const useBrowseSession = create<BrowseSessionState>((set) => ({
             ...current,
             history: current.history.filter(
               (entry) => !(entry.kind === "decision" && entry.lotId === lotId),
+            ),
+          },
+        },
+      };
+    }),
+
+  markBidPlaced: (auctionId, lotId) =>
+    set((state) => {
+      const current = state.sessions[auctionId] ?? EMPTY;
+      return {
+        sessions: {
+          ...state.sessions,
+          [auctionId]: {
+            ...current,
+            history: current.history.map((entry) =>
+              entry.kind === "decision" && entry.lotId === lotId
+                ? { ...entry, bidPlaced: true }
+                : entry,
             ),
           },
         },

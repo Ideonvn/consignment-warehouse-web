@@ -14,6 +14,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Countdown } from "@/components/ui/Countdown";
+import { PendingBidStrip } from "@/components/bid/PendingBidStrip";
+import { useToast } from "@/components/ui/Toast";
+import { cancelPendingBid, usePendingBid } from "@/lib/bid/pendingBid";
 
 /** Cards rendered behind the top one, so the stack reads as a stack. */
 const DEPTH = 3;
@@ -36,10 +39,14 @@ export function CardStack({
 }) {
   const router = useRouter();
   const [exitDirection, setExitDirection] = useState<CardExit>("pass");
+  const pending = usePendingBid();
+  const { showToast } = useToast();
 
   const decide = (lot: Parameters<LotActions["decide"]>[0], direction: SwipeDirection) => {
     setExitDirection(direction);
-    actions.decide(lot, direction);
+    // `commit` is what makes a right swipe here a bid — five seconds from now,
+    // unless it is cancelled. The list calls the same function without it.
+    actions.decide(lot, direction, { commit: true });
   };
 
   const skip = (lot: Parameters<LotActions["skip"]>[0]) => {
@@ -155,6 +162,26 @@ export function CardStack({
           the nav. The scrim keeps it legible over a pale photograph. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--nav-h)+env(safe-area-inset-bottom))] z-20">
         <div className="mx-auto w-full max-w-(--app-width) bg-gradient-to-t from-bg via-bg/90 to-transparent px-4 pt-10 pb-3">
+          {/* While a bid is counting down the strip takes this row rather than
+              sitting above it: the geometry stays exactly as measured at 360×480,
+              and Cancel lands where the thumb already is. The card behind stays
+              swipeable — a swipe on the next one sends this bid, deliberately. */}
+          {pending ? (
+            <div className="pointer-events-auto">
+              <PendingBidStrip
+                pending={pending}
+                onCancel={() => {
+                  const cancelled = cancelPendingBid();
+                  if (!cancelled) return;
+                  showToast({
+                    title: `Lot ${cancelled.lot.lot_number}: bid cancelled`,
+                    description: "Nothing was sent. It's saved in My bids if you want it later.",
+                    tone: "neutral",
+                  });
+                }}
+              />
+            </div>
+          ) : (
           <div className="pointer-events-auto relative flex items-center justify-center gap-5">
             {/* Undo sits out of the centred group so the three targets keep
                 their spacing — crowding them is how someone passes on a lot they
@@ -207,6 +234,7 @@ export function CardStack({
             </svg>
           </Button>
           </div>
+          )}
         </div>
       </div>
     </div>

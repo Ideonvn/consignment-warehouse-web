@@ -12,6 +12,12 @@ const PAGE_SIZE = 20;
 /** Fetch more while there are still cards to look at, never at zero. */
 const PREFETCH_THRESHOLD = 6;
 
+/**
+ * What an undo took back. `bidPlaced` matters because undoing the swipe cannot
+ * undo the bid — there is no retraction API — and the user has to be told.
+ */
+export type UndoResult = { lot: LotCard | null; bidPlaced: boolean };
+
 export type AuctionBrowse = {
   /**
    * The set, in the server's own lot-number order. This is what "the same lots
@@ -39,7 +45,7 @@ export type AuctionBrowse = {
    * it. A pass or an interested swipe also deletes the swipe server-side; a skip
    * was never sent, so undoing one is pure re-ordering and sends nothing.
    */
-  undo: () => Promise<LotCard | null>;
+  undo: () => Promise<UndoResult | null>;
   /**
    * Open the stack at a lot, for the gallery. Navigation, not a gesture: it
    * records nothing in the history and is not undoable.
@@ -195,12 +201,13 @@ export function useAuctionBrowse(
     if (!last) return null;
 
     const restored = allLots.find((lot) => lot.id === last.lotId) ?? null;
+    const bidPlaced = last.kind === "decision" && last.bidPlaced === true;
     pop(auctionId);
 
     // A skip never left the device. Dropping it from the history is the whole
     // undo: the lot stops being sorted to the back and returns to its place,
     // which — being the earliest lot still unresolved — is the front.
-    if (last.kind === "skip") return restored;
+    if (last.kind === "skip") return { lot: restored, bidPlaced: false };
 
     try {
       await deleteSwipe(last.lotId);
@@ -224,7 +231,7 @@ export function useAuctionBrowse(
      * trade the bid history makes by refetching rather than splicing.
      */
     void queryClient.invalidateQueries({ queryKey: queryKeys.lots(auctionId) });
-    return restored;
+    return { lot: restored, bidPlaced };
   }, [history, allLots, auctionId, pop, restore, onError, queryClient]);
 
   const openAt = useCallback(

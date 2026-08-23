@@ -42,10 +42,28 @@ Locked decisions. Don't swap them out without a reason that survives the one bel
 
 Each of these has a consequence attached. They are not style preferences.
 
-**A swipe right is NOT a bid.** It records `interested` and opens the confirm sheet. Money moves
-only when the user confirms in the sheet. If a swipe ever commits money, an accidental thumb spends
-someone's rent. Dismissing the sheet leaves the lot swiped-interested and out of the stack — it is
-still reachable from My Bids; do not silently un-swipe it.
+**A swipe right on the stack commits a bid — after a five-second cancel window.** The gesture is
+the intent; the window is the confirmation. Nothing is sent during it: this is a delay before
+`POST /bids`, not an optimistic write that is undone afterwards, so a mis-swipe costs nothing
+because the request was never made.
+
+**This replaced "a swipe right is NOT a bid", and the protection moved rather than disappeared.**
+The old rule existed because an accidental thumb must not spend someone's rent, and that is still
+true — there is no bid retraction API, and the only way to unmake a placed bid is an operator
+voiding it, which posts ledger reversals. So the window *is* the safety property: it must never
+become configurable to zero, and the gesture must never ship without it.
+
+The specifics, each load-bearing: the bid is exactly the server's `minimum_next_bid_minor` with **no
+maximum** (raising is offered when the user is outbid, which is the moment its value is obvious); a
+lot the user has already bid on opens the sheet instead, and so does a lot whose bid status is
+unknown, because when we cannot tell we do not bid automatically; at most one bid is ever pending,
+and any deliberate next action — another swipe, opening the sheet, a pass — sends it rather than
+queueing behind it; **hiding the tab cancels it**, because a phone call or a lock screen is not a
+decision the user made, and cancelling costs only immediacy while committing costs money that cannot
+be returned; a refused bid un-records its swipe so the lot comes back to the stack, and cannot
+"spring the card back" because five seconds earlier the card left. Dismissing the sheet, or
+cancelling the window, still leaves the lot swiped-interested and reachable from My Bids; do not
+silently un-swipe it.
 
 **The sheet asks for one number: the most you'll pay.** It sends `amount_minor` =
 the server's `minimum_next_bid_minor`, and the user's typed number as `max_amount_minor`. Sending
@@ -229,8 +247,16 @@ for the stack. If a layout ever computed its own membership, switching layout mi
 a different auction, and there would be two filter models where there should be one.
 
 **Every layout goes through the same mutation path.** One `PUT /swipe`, one cache writer, and
-`useLotActions` for what a decision *means* on screen. A list button labelled "Bid" is a right swipe:
-it records `interested` and opens the sheet. **It is not a bid** — money still moves only on confirm.
+`useLotActions` for what a decision *means* on screen. **In the list, a "Bid…" button is not a bid**
+— it records `interested` and opens the sheet, and money moves only on confirm there. The ellipsis
+is doing work: it promises that something opens.
+
+That differs from the stack deliberately. The stack's swipe commits after a cancel window (see the
+rule above) because one lot at a time and a whole-viewport gesture is a materially harder thing to
+hit by accident than a button sitting beside other buttons in a view where rows move — the same
+reason the list holds a resolved row's space for 320ms. Both surfaces keep a confirmation step;
+only its shape differs. Which one applies is chosen at the call site, `decide(lot, direction,
+{ commit: true })`, so there is still exactly one decision path and no second copy to drift.
 
 **Undo is shared and ordered.** One history across all three layouts, newest first, so a pass in the
 list and a skip in the stack rewind in the order they happened. Undoing a decision also

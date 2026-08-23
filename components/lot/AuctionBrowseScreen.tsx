@@ -16,6 +16,7 @@ import { LotList } from "@/components/lot/LotList";
 import { GalleryLayout } from "@/components/lot/GalleryLayout";
 import { FirstRunLayoutChooser } from "@/components/browse/FirstRunLayoutChooser";
 import { BidSheet } from "@/components/bid/BidSheet";
+import { PendingBidRunner } from "@/components/bid/PendingBidRunner";
 import { Countdown } from "@/components/ui/Countdown";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -59,7 +60,10 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
 
   const browse = useAuctionBrowse(auctionId, onBrowseError);
   const biddingOpen = auction?.status === "live";
-  const actions = useLotActions(browse, { biddingOpen });
+  const actions = useLotActions(browse, {
+    biddingOpen,
+    currency: auction?.currency_code ?? "ZAR",
+  });
 
   // Live prices for what any layout is showing, decided once rather than in each.
   useLotSubscription(
@@ -176,6 +180,11 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
         open={actions.bidLot !== null}
         onClose={actions.closeBidSheet}
       />
+
+      {/* Owns the cancel window: its timer, its visibility rule, the request, and
+          what happens to the swipe afterwards. One instance, because there is one
+          pending bid. */}
+      <PendingBidRunner onRaise={actions.openSheet} />
 
       {/* Asked here, not on the auction list: choosing between cards, rows and a
           grid means nothing until there are lots to picture in them. */}

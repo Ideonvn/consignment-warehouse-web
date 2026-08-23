@@ -310,6 +310,72 @@ code no longer follows.
 (scheduled, 6 lots) and "Scale Test 250" (scheduled, 250 lots). Delete them when convenient; they
 exist only for the height and scale measurements.
 
+## One-tap bidding on the stack
+
+A right swipe on the card stack now places a bid, five seconds after the gesture, with a visible
+countdown and a Cancel in the row where the action buttons normally sit. **Nothing is sent during
+the window** — it is a delay before `POST /bids`, not an optimistic write that gets undone — so a
+mis-swipe costs nothing. The list is unchanged and its button is now labelled "Bid…".
+
+**Scoped without forking the hook.** `decide(lot, direction, { commit: true })`: the option is set
+at the call site, so the stack's swipe, its Bid button and its right arrow commit while the list's
+button does not. Deriving it from "which layout is mounted" was rejected — it is the affordance that
+differs, not the screen.
+
+**No new API field was needed.** `max_amount_minor` is `int | None` on `BidCreateIn`, and
+`bidding.py` computes `effective_max = max(amount_minor, 0)` when it is absent, which is exactly a
+bid with no headroom. `useBidSubmit` now takes `maxAmountMinor: number | null` and omits the field.
+
+**Backgrounding cancels rather than commits** — reversed from the original instruction, on the
+asymmetry: an interruption the user did not choose (a call, a notification, the lock screen) should
+not convert a cancellable window into an unretractable bid. Cancelling costs immediacy only, since
+the swipe is still recorded and the lot is in My bids. It also deletes the `pagehide` problem
+entirely: no keepalive fetch with a possibly-expired token, and no bid whose outcome nobody can
+know. The window is never resumed on return — a bid firing minutes later at a moved price is worse
+than either alternative.
+
+**Three undo states, one control.** A running window: cancel and undo the swipe, nothing sent. A
+cancelled or plain swipe: as before. A swipe whose bid already went out: the swipe is undone and the
+toast says *"Your bid still stands — a placed bid can't be taken back"*, because there is no
+retraction API and implying otherwise would be a lie about money. `browseSession` gained a
+`bidPlaced` flag to make that wording truthful.
+
+**Refusals roll back by lot id, not by "undo the newest".** Five seconds is long enough to have
+swiped two more cards, and undoing one of those instead would be its own bug.
+
+**A bug found by driving it:** the timer committed the pending bid without clearing the slot, so the
+countdown stayed on screen after the bid had gone and the next deliberate action would have flushed
+the *same* bid again — only the idempotency key stood between that and a duplicate. Both the timer
+and the flush now go through a single `takePendingBid()` that empties the slot and returns it in one
+step.
+
+**Verified against the running backend**, network log as the source of truth:
+
+| Check | Result |
+|---|---|
+| Cancel inside the window | **Zero `POST /bids`**, from the request log — only the `PUT /swipe` |
+| Let it elapse | One `POST` → 200, strip cleared, buttons back, "You're winning lot 2" |
+| Swipe then swipe the next card | Exactly one `POST`, one `client_request_id` |
+| Two right-presses in a row | One `POST`, one request id |
+| Already bid on that lot | Sheet opens immediately, no window, no `POST` |
+| Deposit shortfall | 403 → "You have R 4 999,99 / needs R 5 000 / **Add R 0,01**" — the server's `shortfall_minor`, plus reference `cb-0826` |
+| Lot closed mid-window | Clock patched to expire inside the window: 409 → "That lot closed… nothing was placed and nothing was charged" |
+| Rate limited | Real limiter tripped at request 61 on one lot: 429 → "too many bids on this lot. Try again in 33s.", lot restored |
+| Tab hidden mid-window | Zero `POST` then or 6.5s later; strip gone; "bid not placed… saved in My bids"; not resumed on return |
+| Undo after a placed bid | "Lot 2 is back — Your bid still stands…", no second `POST` |
+| Reduced motion | Countdown and Cancel present, drain bar `display: none` |
+| 360×480, live auction | Strip clears the nav, Cancel 94×56, price clears the strip by 7px, no page scroll |
+| List untouched | "Bid…" opens the sheet, no window, zero `POST` after six seconds |
+
+**Reflex tap:** the old Bid button's centre lands inside Cancel's box (Cancel spans x 267–361; Bid's
+centre was 267,704 with a 56px box, ~42% overlap). A thumb going back for "Bid" therefore hits
+Cancel or the inert text beside it — never a second bid and never a pass. Cancel then says nothing
+was sent and the lot is in My bids, so it reads as a correction.
+
+**Test data:** a no-bid lot in Autumn Fine Jewellery had its clock moved to test the 409, and ~61
+deliberately-invalid bids were fired at Autumn lot 5 to trip the limiter (invalid, so no prices
+moved). Both are seeded-data artefacts, not product state.
+
 ## Backend surface adopted
 
 The backend was extended in response to the requests above, and the client workarounds they

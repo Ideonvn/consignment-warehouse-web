@@ -251,9 +251,10 @@ function LotRow({
           onClick={() => onDecide("interested")}
           className="flex-1"
         >
-          {/* Never "Bid" as a completed act: this opens the sheet, and money
-              moves only on confirm there. */}
-          {biddingOpen && open ? "Bid" : "Interested"}
+          {/* The ellipsis is the difference from the stack, where a right swipe
+              commits after a cancel window. Here the button opens the sheet and
+              money moves only on confirm — the label has to promise that. */}
+          {biddingOpen && open ? "Bid…" : "Interested"}
         </Button>
       </div>
     </article>

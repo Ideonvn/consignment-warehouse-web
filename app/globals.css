@@ -110,6 +110,17 @@
   }
 }
 
+/* The cancel window draining. Decoration only: `PendingBidStrip` hides this bar
+   under `prefers-reduced-motion` and the countdown number carries the meaning. */
+@keyframes pending-bid-drain {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
 @keyframes live {
   0%,
   100% {
