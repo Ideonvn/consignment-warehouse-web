@@ -6,7 +6,7 @@ import { deleteSwipe, listLots, setSwipe } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
 import { soonestLotDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import { useBrowseSession, useSessionFor } from "@/lib/browse/browseSession";
-import type { LotCard, SwipeDirection } from "@/types/api";
+import type { LotCard, LotSummary, SwipeDirection } from "@/types/api";
 
 const PAGE_SIZE = 20;
 /** Fetch more while there are still cards to look at, never at zero. */
@@ -33,13 +33,13 @@ export type AuctionBrowse = {
   exhausted: boolean;
   canUndo: boolean;
   /** Records the swipe and advances the stack. Rolls back if the server refuses. */
-  decide: (lot: LotCard, direction: SwipeDirection) => Promise<void>;
+  decide: (lot: LotSummary, direction: SwipeDirection) => Promise<void>;
   /**
    * Move a lot to the back of the stack without deciding anything. Deliberately
    * local: nothing is sent, nothing is stored, and it is gone on reload — a skip
    * is "not now", not a preference the user then has to manage.
    */
-  skip: (lot: LotCard) => void;
+  skip: (lot: LotSummary) => void;
   /**
    * Reverse the most recent gesture, whatever it was and whichever layout made
    * it. A pass or an interested swipe also deletes the swipe server-side; a skip
@@ -171,7 +171,7 @@ export function useAuctionBrowse(
   }, [cards.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const decide = useCallback(
-    async (lot: LotCard, direction: SwipeDirection) => {
+    async (lot: LotSummary, direction: SwipeDirection) => {
       push(auctionId, { kind: "decision", lotId: lot.id, direction });
       try {
         await setSwipe(lot.id, direction);
@@ -190,7 +190,7 @@ export function useAuctionBrowse(
   );
 
   const skip = useCallback(
-    (lot: LotCard) => {
+    (lot: LotSummary) => {
       push(auctionId, { kind: "skip", lotId: lot.id });
     },
     [auctionId, push],

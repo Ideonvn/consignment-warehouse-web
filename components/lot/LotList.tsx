@@ -6,7 +6,6 @@ import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
 import { useMyBidStatus, type MyBidStatus } from "@/lib/hooks/useMyBidStatus";
 import { useLoadMoreOnScroll } from "@/lib/hooks/useLoadMoreOnScroll";
-import type { AuctionBrowse } from "@/lib/hooks/useAuctionBrowse";
 import type { LotActions } from "@/lib/hooks/useLotActions";
 import { Button } from "@/components/ui/Button";
 import { Countdown } from "@/components/ui/Countdown";
@@ -15,7 +14,7 @@ import { LotImage } from "@/components/ui/LotImage";
 import { Money } from "@/components/ui/Money";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils/cn";
-import type { LotCard } from "@/types/api";
+import type { LotSummary } from "@/types/api";
 
 /**
  * How long a resolved row keeps its space before the list closes up.
@@ -32,26 +31,41 @@ import type { LotCard } from "@/types/api";
 const HOLD_MS = 320;
 
 export function LotList({
-  browse,
+  lots,
   actions,
   currency,
   biddingOpen,
+  isPending,
+  isFetchingMore,
+  hasMore,
+  loadMore,
+  canUndo,
 }: {
-  browse: AuctionBrowse;
-  actions: LotActions;
+  lots: LotSummary[];
+  /**
+   * Absent for an anonymous visitor, which is how this list has **no action
+   * buttons at all** rather than disabled ones. A disabled control is an
+   * invitation to work out how to enable it; absence is honest.
+   */
+  actions?: LotActions;
   currency: string;
   biddingOpen: boolean;
+  isPending: boolean;
+  isFetchingMore: boolean;
+  hasMore: boolean;
+  loadMore: () => void;
+  canUndo?: boolean;
 }) {
-  const { statusFor, truncated } = useMyBidStatus();
-  const sentinel = useLoadMoreOnScroll(browse.hasMore, browse.loadMore);
+  const { statusFor, truncated } = useMyBidStatus(Boolean(actions));
+  const sentinel = useLoadMoreOnScroll(hasMore, loadMore);
   /*
    * Snapshots of rows that have been actioned but are still holding their space.
    *
-   * They have to be snapshots: `decide` removes the lot from `browse.remaining`
+   * They have to be snapshots: `decide` removes the lot from `lots`
    * immediately — that optimism is what makes the action feel instant — so by
    * the time this renders there is no live lot left to hold a space for.
    */
-  const [leaving, setLeaving] = useState<LotCard[]>([]);
+  const [leaving, setLeaving] = useState<LotSummary[]>([]);
   const [announcement, setAnnouncement] = useState("");
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -63,7 +77,7 @@ export function LotList({
     };
   }, []);
 
-  function hold(lot: LotCard, direction: "pass" | "interested") {
+  function hold(lot: LotSummary, direction: "pass" | "interested") {
     setLeaving((current) =>
       current.some((held) => held.id === lot.id) ? current : [...current, lot],
     );
@@ -79,14 +93,14 @@ export function LotList({
     timers.current.set(lot.id, timer);
   }
 
-  if (browse.isPending) return <ListSkeleton />;
+  if (isPending) return <ListSkeleton />;
 
-  const liveIds = new Set(browse.remaining.map((lot) => lot.id));
+  const liveIds = new Set(lots.map((lot) => lot.id));
   // An undo inside the hold window puts the lot back in the set; the held ghost
   // is dropped rather than rendered alongside the real row.
   const held = leaving.filter((lot) => !liveIds.has(lot.id));
   const heldIds = new Set(held.map((lot) => lot.id));
-  const rows = [...browse.remaining, ...held].sort((a, b) => a.lot_number - b.lot_number);
+  const rows = [...lots, ...held].sort((a, b) => a.lot_number - b.lot_number);
 
   if (rows.length === 0) {
     return (
@@ -114,11 +128,15 @@ export function LotList({
           destructive action with no way back is how someone loses a lot. */}
       <div className="sticky top-0 z-10 -mx-4 mb-2 flex items-center justify-between gap-3 border-b border-border bg-bg/95 px-4 py-2 backdrop-blur">
         <p className="text-xs text-text-muted">
-          {browse.remaining.length} {browse.remaining.length === 1 ? "lot" : "lots"} left
+          {lots.length} {lots.length === 1 ? "lot" : "lots"}
+          {actions ? " left" : ""}
         </p>
-        <Button variant="ghost" disabled={!browse.canUndo} onClick={actions.undo}>
-          Undo
-        </Button>
+        {/* No actions, no Undo — and no disabled Undo either. */}
+        {actions ? (
+          <Button variant="ghost" disabled={!canUndo} onClick={actions.undo}>
+            Undo
+          </Button>
+        ) : null}
       </div>
 
       {truncated ? (
@@ -137,10 +155,14 @@ export function LotList({
               biddingOpen={biddingOpen}
               bidStatus={statusFor(lot.id)}
               leaving={heldIds.has(lot.id)}
-              onDecide={(direction) => {
-                hold(lot, direction);
-                actions.decide(lot, direction);
-              }}
+              onDecide={
+                actions
+                  ? (direction) => {
+                      hold(lot, direction);
+                      actions.decide(lot, direction);
+                    }
+                  : undefined
+              }
             />
           </li>
         ))}
@@ -151,7 +173,7 @@ export function LotList({
       </p>
 
       <div ref={sentinel} aria-hidden className="h-px" />
-      {browse.isFetchingMore ? <Skeleton className="mt-2 h-24 w-full rounded-2xl" /> : null}
+      {isFetchingMore ? <Skeleton className="mt-2 h-24 w-full rounded-2xl" /> : null}
     </div>
   );
 }
@@ -173,12 +195,13 @@ function LotRow({
   leaving,
   onDecide,
 }: {
-  lot: LotCard;
+  lot: LotSummary;
   currency: string;
   biddingOpen: boolean;
   bidStatus: MyBidStatus;
   leaving: boolean;
-  onDecide: (direction: "pass" | "interested") => void;
+  /** Absent for an anonymous visitor: the row then has no buttons at all. */
+  onDecide?: (direction: "pass" | "interested") => void;
 }) {
   const now = useNow();
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
@@ -231,32 +254,34 @@ function LotRow({
         </div>
       </Link>
 
-      <div className="flex gap-2 border-t border-border px-3 py-2">
-        <Button
-          variant="secondary"
-          aria-label={`Pass on lot ${lot.lot_number}, ${lot.title}`}
-          disabled={leaving}
-          onClick={() => onDecide("pass")}
-          className="flex-1"
-        >
-          Pass
-        </Button>
-        <Button
-          aria-label={
-            biddingOpen && open
-              ? `Bid on lot ${lot.lot_number}, ${lot.title}`
-              : `Save lot ${lot.lot_number}, ${lot.title}, as interested`
-          }
-          disabled={leaving}
-          onClick={() => onDecide("interested")}
-          className="flex-1"
-        >
-          {/* The ellipsis is the difference from the stack, where a right swipe
-              commits after a cancel window. Here the button opens the sheet and
-              money moves only on confirm — the label has to promise that. */}
-          {biddingOpen && open ? "Bid…" : "Interested"}
-        </Button>
-      </div>
+      {onDecide ? (
+        <div className="flex gap-2 border-t border-border px-3 py-2">
+          <Button
+            variant="secondary"
+            aria-label={`Pass on lot ${lot.lot_number}, ${lot.title}`}
+            disabled={leaving}
+            onClick={() => onDecide("pass")}
+            className="flex-1"
+          >
+            Pass
+          </Button>
+          <Button
+            aria-label={
+              biddingOpen && open
+                ? `Bid on lot ${lot.lot_number}, ${lot.title}`
+                : `Save lot ${lot.lot_number}, ${lot.title}, as interested`
+            }
+            disabled={leaving}
+            onClick={() => onDecide("interested")}
+            className="flex-1"
+          >
+            {/* The ellipsis is the difference from the stack, where a right swipe
+                commits after a cancel window. Here the button opens the sheet and
+                money moves only on confirm — the label has to promise that. */}
+            {biddingOpen && open ? "Bid…" : "Interested"}
+          </Button>
+        </div>
+      ) : null}
     </article>
   );
 }

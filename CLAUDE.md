@@ -10,7 +10,9 @@ The product is a **stack of cards**, one per lot: swipe left to pass, swipe righ
 sheet. A second screen shows what you're bidding on and whether you're winning. Auction list, lot
 detail and profile are deliberately secondary.
 
-The stack is the default and the identity, but it is **one of three ways to browse an auction** —
+The stack is the default and the identity **for a signed-in bidder**, and one of three ways to
+browse an auction — anonymous visitors get the gallery and the list only, for the reason in
+"Anonymous browsing". It is
 cards, a list, and a photo gallery — chosen per device. See "Three layouts, one lot set". The stack
 is the only one with gestures; the other two exist because the card stack tested well without
 testing well for everyone.
@@ -302,6 +304,63 @@ dependency would be paid for by every auction to fix a problem no auction has ye
 gallery scroll, so they must not adopt any of them; they rely on `AppShell`'s bottom padding, and the
 list's undo bar is `sticky top-0` rather than fixed above the nav.
 
+## Anonymous browsing
+
+Public auctions are readable with no account at all, through `/public/*`. **The URLs are the same
+ones members use** — one canonical link per auction and per lot — because a link pasted into a
+WhatsApp thread has to open for whoever receives it. Two URLs for one lot would split sharing and
+let someone send a link that does not work.
+
+**The guard stays in the layout, with an allowlist.** `lib/auth/publicPaths.ts` names the three
+public paths and `AuthGuard` consults it. The alternative — no guard in the layout, `<AuthGuard>`
+added to each private page — inverts the failure direction: a new page would ship public unless
+someone remembered, and the pages behind this guard show a ledger and a phone number. A mistake in
+the allowlist leaves a public page guarded, which is loud and harmless.
+
+**Anonymous visitors look and nothing else**, and the restraint that applies to signed-in browsing
+applies here: no deposit, no blur, no nag, nothing hidden behind signing up. One "Get started" bar,
+exactly `--nav-h` tall so it sits where the bottom nav does and the layout maths is unchanged.
+
+**Absence, not disabled controls.** The list and the gallery take `actions?`; anonymous passes
+nothing and the rows render **no buttons at all**. A disabled control is an invitation to work out
+how to enable it.
+
+**No card stack for anonymous.** The stack is a decision surface — drag, action row, undo — and with
+nothing to resolve it is a full-screen photo you cannot advance, with `touch-none` stopping it
+scrolling. Gallery is the default and list is the alternative; a stored preference of `stack` falls
+back **without being overwritten**, since it is still their preference for when they sign in.
+
+**`LotSummary` is the boundary, not a mode flag.** The public shapes carry no `my_swipe`, no
+`am_i_leading`, no `bid_sequence` — absent, not null — and the presentational components take the
+structural type both sides satisfy. A component that never receives a member field cannot render
+one. Exactly three places ask which mode they are in: the entries for `/`, the auction and the lot.
+
+**The public client is its own module** (`lib/api/publicClient.ts`), not a flag on `client.ts`.
+`generateMetadata` runs in Node, and the authenticated client touches the session store and the
+clock offset — module-level state that a server process shares across every request it is handling.
+It also sends `credentials: "include"` unconditionally and can reach `endSession()` on a 401. None
+of that may be in the path of an anonymous read. **The single-flight refresh is untouched.**
+
+**Live-ness is polling, because there is no anonymous socket.** `/public/auctions/{id}/prices` every
+10s while live, 5s once any visible lot is inside its anti-snipe window (the only time this model
+moves fast), 60s while scheduled, not at all once ended. Never below the endpoint's own `max-age=5`,
+paused when the tab is hidden, and stopped after ten idle minutes with a tap to resume. The
+countdown stays client-side on `useNow()`, so the clock ticks smoothly while prices step.
+
+**A 404 on something already rendered is not the same as a 404 on arrival.** Visibility is
+changeable at any time, so an auction can go private while somebody is reading it. The API cannot
+tell those apart without confirming that private things exist; the client can, because it had the
+thing a moment ago (`lib/public/seen.ts`). Previously seen gets "no longer available"; first load
+gets an ordinary not-found. The **price poll is what usually notices** — the auction and lot queries
+are sitting on cached data with no reason to re-ask.
+
+**`cw.had_session` is a hint and never authority.** The refresh cookie is HttpOnly on the API's
+origin, so neither the server nor the client knows whether a visitor is signed in until the refresh
+returns — which means one wrong first paint is unavoidable. The hint picks which: a device that has
+signed in before waits behind a skeleton, a device that has not gets the public content immediately.
+It grants nothing, and it is cleared in `endSession` alongside the browse state so a failed refresh
+drops it too.
+
 ## Theming
 
 Light / Dark / System, selectable on `/profile`. **Dark is the default and the product's
@@ -470,8 +529,10 @@ digits. Production runs on the default.
 
 ## Structure
 
-- `app/` — routes. `(app)/` is everything behind the sign-in wall (guard, bottom nav, realtime
-  provider); `login/` and `welcome/` sit outside it.
+- `app/` — routes. `(app)/` is everything with app chrome, which is no longer the same as
+  everything private: `/`, `/auctions/[id]` and `/lots/[id]` are **canonical URLs that work signed
+  in or not**. The wall is `AuthGuard`, still in that group's layout, minus the allowlist in
+  `lib/auth/publicPaths.ts`. `login/` and `welcome/` sit outside the group entirely.
 - `components/` — UI primitives (`ui/`) plus feature components grouped by surface.
 - `lib/api/` — typed client, endpoints, zod schemas, error classes, query keys, cache writers.
 - `lib/auth/` — session store, device id, login flow state.
@@ -533,8 +594,13 @@ Accepted, with reasons. Please don't re-raise them.
   per-device — the same person wants dark on a phone at night and light on a laptop in daylight — so
   syncing it across devices would be wrong behaviour, not a missing feature. Do not "fix" this by
   adding a user field.
-- **Lot pages have static metadata.** Per-lot titles would need authenticated server rendering,
-  which conflicts with the memory-only access token.
+- **Lot metadata is real for public lots and generic for private ones.** This gap is half closed.
+  `generateMetadata` fetches `/public/lots/{id}` server-side — no token is involved, which is
+  exactly why the server can render it — so a shared link previews the photo, the title and the
+  price. A private or missing lot 404s there and falls back to site metadata; **that is deliberate,
+  not a shortfall**, because a title naming a private lot would confirm it exists. Private lots
+  still cannot have real previews, and still for the original reason: the access token is
+  memory-only and the server cannot see a session.
 - **Bid history refetches rather than splicing** a new bid into page one. Simpler and always
   correct; one small request per bid, on the lot detail screen only.
 - **Image optimization is off** (`next.config.ts`) until the media host is settled — lot photos come

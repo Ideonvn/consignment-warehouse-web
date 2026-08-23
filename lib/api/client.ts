@@ -9,9 +9,9 @@ import {
   toApiError,
 } from "@/lib/api/errors";
 import { tokenPairSchema } from "@/lib/api/schemas";
+import { API_BASE_URL } from "@/lib/api/apiBaseUrl";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+export { API_BASE_URL } from "@/lib/api/apiBaseUrl";
 
 export type PageMeta = {
   /** `X-Next-Cursor`; null when the list is exhausted. */

@@ -22,6 +22,13 @@ import type {
   userSchema,
   wsTicketSchema,
 } from "@/lib/api/schemas";
+import type {
+  publicAuctionSchema,
+  publicLotCardSchema,
+  publicLotDetailSchema,
+  publicLotImageSchema,
+  publicLotPriceSchema,
+} from "@/lib/api/publicSchemas";
 
 /**
  * The API contract. Types are derived from the zod schemas so the compile-time
@@ -69,3 +76,38 @@ export type ClientMessage =
   | { action: "unsubscribe"; lot_ids: string[] }
   | { action: "resync"; lot_id: string; after_sequence: number }
   | { action: "ping" };
+
+/* --------------------------------------------------------------- public --- */
+
+/**
+ * The anonymous catalogue. Inferred from `lib/api/publicSchemas.ts`, which is a
+ * separate contract on purpose: none of these carry per-user fields.
+ */
+export type PublicAuction = z.infer<typeof publicAuctionSchema>;
+export type PublicLotCard = z.infer<typeof publicLotCardSchema>;
+export type PublicLotDetail = z.infer<typeof publicLotDetailSchema>;
+export type PublicLotImage = z.infer<typeof publicLotImageSchema>;
+export type PublicLotPrice = z.infer<typeof publicLotPriceSchema>;
+
+/**
+ * What a presentational lot component actually needs.
+ *
+ * Both `LotCard` and `PublicLotCard` satisfy this, which is how the gallery, the
+ * list and the card face serve both modes without being told which one they are
+ * in. Widen it only with fields that exist on *both* sides.
+ */
+export type LotSummary = Pick<
+  LotCard,
+  | "id"
+  | "auction_id"
+  | "lot_number"
+  | "title"
+  | "status"
+  | "starting_price_minor"
+  | "current_bid_minor"
+  | "minimum_next_bid_minor"
+  | "bid_count"
+  | "effective_ends_at"
+  | "reserve_met"
+  | "primary_image_url"
+>;

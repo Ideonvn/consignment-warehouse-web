@@ -34,5 +34,8 @@ module "web" {
     var.payment_instructions != "" ? {
       NEXT_PUBLIC_PAYMENT_INSTRUCTIONS = var.payment_instructions
     } : {},
+    # Absolute link previews. Falls back to the production apex in code, so an
+    # empty value is safe rather than broken.
+    var.site_url != "" ? { NEXT_PUBLIC_SITE_URL = var.site_url } : {},
   )
 }

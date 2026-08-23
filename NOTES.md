@@ -376,6 +376,69 @@ was sent and the lot is in My bids, so it reads as a correction.
 deliberately-invalid bids were fired at Autumn lot 5 to trip the limiter (invalid, so no prices
 moved). Both are seeded-data artefacts, not product state.
 
+## Anonymous browsing and shareable links
+
+Public auctions readable with no account, on the same URLs members use, with real link previews.
+
+**Routing: one group, guard in the layout, allowlist beside it.** Splitting `(app)` into sibling
+groups would have remounted `RealtimeProvider` — and dropped the socket — every time someone moved
+between an auction and My bids, because sibling groups have sibling layouts. Moving the guard down
+onto the private pages instead would have inverted the failure direction: a new page would ship
+public unless someone remembered. So the guard stays in the layout and `lib/auth/publicPaths.ts`
+lists the three paths that are open. A typo there leaves a public page guarded, which is loud and
+harmless; the opposite mistake would be silent and would expose a ledger.
+
+**`LotSummary` rather than a mode flag.** The public shapes have no `my_swipe`, `am_i_leading` or
+`bid_sequence` at all, so the presentational components were narrowed to the structural type both
+sides satisfy, and member affordances arrive as an optional `actions` prop. Three route-level checks
+decide mode; nothing below asks. `LotList` and `GalleryLayout` also stopped taking the whole
+`AuctionBrowse` object, which is what let them serve both callers.
+
+**A separate public client, and the refresh logic untouched.** The deciding reason was
+`generateMetadata`: it runs in Node, and `lib/api/client.ts` reaches into the session store and the
+clock offset — module-level state that a server process shares across concurrent requests. That
+would have been intermittent and horrible to diagnose. Also: no cookies, no reachable `endSession`,
+no `SessionExpiredError` in anonymous traffic.
+
+**Metadata caching.** `next: { revalidate: 30 }`, matching the endpoint's `max-age=30`. It has to be
+explicit — App Router fetches are uncached by default and Next does not derive a TTL from upstream
+`Cache-Control` — otherwise a crawler walking 250 lots is 250 origin requests, each eu-west-1 to
+af-south-1. `metadataBase` comes from a new `NEXT_PUBLIC_SITE_URL` (threaded through `.env.example`
+and Terraform), because without it Next resolves `og:url` and any relative image against localhost.
+
+**Poll ladder:** 10s live, 5s once a visible lot is inside its anti-snipe window, 60s scheduled,
+nothing when ended; paused while hidden, stopped after ten idle minutes. 5s is the floor the
+endpoint's `max-age` sets, and outside the close this model moves in minutes, so 10s costs nothing
+perceptible and halves the traffic.
+
+**Verified against the running backend** (Spring Collectables switched to `public` via the admin
+API), storage and cookies cleared:
+
+| Check | Result |
+|---|---|
+| Anonymous walk: list → auction → lot | Catalogue, 24-tile gallery, read-only lot page |
+| `Authorization` headers on any request | **Zero** |
+| Action buttons anywhere anonymous | **Zero** — not disabled, absent |
+| Nav for anonymous | No tabs; one "Get started" bar |
+| Public lot `<meta>`, from `curl` | `<title>Lot 1: Spring Collectables lot 1 · …`, `og:title`, `og:description` ("Starting at R 99 · 0 bids · …"), absolute `og:url` and `og:image`, `twitter:card=summary_large_image` |
+| Private lot / private auction, from `curl` | Generic `<title>Consignment Warehouse</title>`, **no `og:*`**, and the private auction's name appears **0 times** in the served HTML |
+| Signed in, same URLs | Card stack, Pass/Skip/Bid/Undo, three nav tabs, no CTA bar |
+| Auction made private mid-browse | "This auction is no longer available" within one poll (<4s) |
+| Same URL, fresh visitor | "We couldn't find that auction" — ordinary not-found |
+
+**One deviation from the brief, stated plainly.** The walk shows no `Authorization` header anywhere,
+but there *is* one `POST /auth/refresh` per full page load, from `SessionBootstrap` probing for a
+session. It is not a public-client request — it returns 401 and resolves the visitor to anonymous —
+and it does not block the public content, which renders immediately when no `cw.had_session` hint is
+present. Skipping the probe when the hint is absent would remove it, at the cost of signing out
+every existing session whose localStorage has been cleared but whose cookie is still valid. That
+trade seemed the wrong way round to make silently, so it is left as is and flagged here.
+
+**Found while verifying:** a 404 arriving while a visitor was already reading left the stale page up,
+because the auction and lot queries were sitting on cached data with no reason to re-ask. The price
+poll is the only thing still talking to the server, so its error now feeds the same surface — and
+404s are no longer retried, since private, draft and missing are all answers rather than hiccups.
+
 ## Backend surface adopted
 
 The backend was extended in response to the requests above, and the client workarounds they

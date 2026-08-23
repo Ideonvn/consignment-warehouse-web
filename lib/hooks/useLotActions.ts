@@ -12,7 +12,7 @@ import {
   getPendingBid,
 } from "@/lib/bid/pendingBid";
 import { useToast } from "@/components/ui/Toast";
-import type { LotCard, SwipeDirection } from "@/types/api";
+import type { LotSummary, SwipeDirection } from "@/types/api";
 
 export type DecideOptions = {
   /**
@@ -40,13 +40,13 @@ export type LotActions = {
    * and only on a lot with no bid of the user's on it yet — anything else opens
    * the sheet, where the amount and the maximum live.
    */
-  decide: (lot: LotCard, direction: SwipeDirection, options?: DecideOptions) => void;
-  skip: (lot: LotCard) => void;
+  decide: (lot: LotSummary, direction: SwipeDirection, options?: DecideOptions) => void;
+  skip: (lot: LotSummary) => void;
   undo: () => void;
   /** Opens the sheet directly — the raise offered after being outbid. */
-  openSheet: (lot: LotCard) => void;
+  openSheet: (lot: LotSummary) => void;
   /** The lot whose bid sheet is open, if any. */
-  bidLot: LotCard | null;
+  bidLot: LotSummary | null;
   closeBidSheet: () => void;
   /** What the last action was, for a layout that wants to animate it out. */
   lastResolved: string | null;
@@ -67,12 +67,12 @@ export function useLotActions(
   const { showToast } = useToast();
   const { statusFor } = useMyBidStatus();
   const now = useNow();
-  const [bidLot, setBidLot] = useState<LotCard | null>(null);
+  const [bidLot, setBidLot] = useState<LotSummary | null>(null);
   const [lastResolved, setLastResolved] = useState<string | null>(null);
   const busy = useRef(false);
 
   const decide = useCallback(
-    (lot: LotCard, direction: SwipeDirection, options?: DecideOptions) => {
+    (lot: LotSummary, direction: SwipeDirection, options?: DecideOptions) => {
       if (busy.current) return;
       // A window is a grace period, not a queue: doing anything else deliberate
       // means the previous bid was meant, so it goes now.
@@ -119,7 +119,7 @@ export function useLotActions(
   );
 
   const skip = useCallback(
-    (lot: LotCard) => {
+    (lot: LotSummary) => {
       if (busy.current) return;
       flushPendingBid();
       setLastResolved(lot.id);
@@ -161,7 +161,7 @@ export function useLotActions(
     });
   }, [browse, showToast]);
 
-  const openSheet = useCallback((lot: LotCard) => {
+  const openSheet = useCallback((lot: LotSummary) => {
     flushPendingBid();
     setBidLot(lot);
   }, []);

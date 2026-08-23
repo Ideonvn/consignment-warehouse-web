@@ -8,7 +8,7 @@ import { usePricePulse } from "@/lib/realtime/store";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
 import { lotOutcome } from "@/lib/format/lotStatus";
-import type { LotCard } from "@/types/api";
+import type { LotSummary } from "@/types/api";
 import { cn } from "@/lib/utils/cn";
 
 /** The visible face of a lot: photo first, price loudest. */
@@ -18,7 +18,7 @@ export function LotCardFace({
   priority = false,
   className,
 }: {
-  lot: LotCard;
+  lot: LotSummary;
   currency: string;
   priority?: boolean;
   className?: string;

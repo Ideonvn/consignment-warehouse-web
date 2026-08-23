@@ -2,7 +2,17 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 
+/**
+ * Absolute URLs for link previews.
+ *
+ * `openGraph.url` and any relative image are resolved against this. Without it
+ * Next falls back to localhost, which produces a preview that works on the
+ * developer's machine and nowhere else — invisible until someone shares a link.
+ */
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://consignment-warehouse.com";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Consignment Warehouse",
     template: "%s · Consignment Warehouse",

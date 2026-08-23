@@ -16,7 +16,7 @@ import {
 import { useBidSubmit } from "@/lib/hooks/useBidSubmit";
 import { BidOutcomeSheet, type OneTapOutcome } from "@/components/bid/BidOutcomeSheet";
 import { useToast } from "@/components/ui/Toast";
-import type { LotCard } from "@/types/api";
+import type { LotSummary } from "@/types/api";
 
 /**
  * Owns everything effectful about the cancel window: the timer, the tab-visibility
@@ -30,7 +30,7 @@ export function PendingBidRunner({
   onRaise,
 }: {
   /** Opens the bid sheet on a lot, for the raise offered after being outbid. */
-  onRaise: (lot: LotCard) => void;
+  onRaise: (lot: LotSummary) => void;
 }) {
   const pending = usePendingBid();
   const queryClient = useQueryClient();
@@ -40,7 +40,7 @@ export function PendingBidRunner({
   const markBidPlaced = useBrowseSession((state) => state.markBidPlaced);
 
   const [outcomeState, setOutcomeState] = useState<OneTapOutcome | null>(null);
-  const [raiseLot, setRaiseLot] = useState<LotCard | null>(null);
+  const [raiseLot, setRaiseLot] = useState<LotSummary | null>(null);
 
   /**
    * Put the lot back.

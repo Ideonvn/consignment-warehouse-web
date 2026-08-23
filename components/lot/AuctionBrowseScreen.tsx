@@ -153,16 +153,25 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
           />
         ) : layout === "list" ? (
           <LotList
-            browse={browse}
+            lots={browse.remaining}
             actions={actions}
             currency={auction.currency_code}
             biddingOpen={biddingOpen}
+            isPending={browse.isPending}
+            isFetchingMore={browse.isFetchingMore}
+            hasMore={browse.hasMore}
+            loadMore={browse.loadMore}
+            canUndo={browse.canUndo}
           />
         ) : (
           <GalleryLayout
             auctionId={auctionId}
-            browse={browse}
+            lots={browse.remaining}
             currency={auction.currency_code}
+            isPending={browse.isPending}
+            isFetchingMore={browse.isFetchingMore}
+            hasMore={browse.hasMore}
+            loadMore={browse.loadMore}
             onOpenLot={(lot) => router.push(`?at=${lot.lot_number}`, { scroll: false })}
           />
         )

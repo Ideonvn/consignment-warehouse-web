@@ -32,6 +32,9 @@ subdomain_prefix = ""
 api_base_url = "https://api.consignment-warehouse.com/api/v1"
 ws_url       = "wss://api.consignment-warehouse.com/api/v1/ws"
 
+# The origin this app is served from, so shared lot links preview correctly.
+site_url = "https://consignment-warehouse.com"
+
 # PLACEHOLDER — replace in terraform.tfvars, which is gitignored, and nowhere else.
 # Real banking details must not land in a tracked file. Left empty, the app falls back to
 # an honest "contact the warehouse" line rather than inventing details, which is a worse

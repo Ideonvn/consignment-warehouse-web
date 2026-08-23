@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { serverNow } from "@/lib/format/clock";
 import { uuid } from "@/lib/utils/uuid";
-import type { LotCard } from "@/types/api";
+import type { LotSummary } from "@/types/api";
 
 /**
  * How long a swiped bid sits before it is sent.
@@ -18,7 +18,7 @@ export const CANCEL_WINDOW_MS = 5_000;
 
 export type PendingBid = {
   auctionId: string;
-  lot: LotCard;
+  lot: LotSummary;
   currency: string;
   /** The server's figure, read from the lot. Never computed here. */
   amountMinor: number;
@@ -67,7 +67,7 @@ export function registerPendingBidCommit(fn: (pending: PendingBid) => void): () 
 /** Start a window, sending any bid already waiting rather than queueing behind it. */
 export function armPendingBid(input: {
   auctionId: string;
-  lot: LotCard;
+  lot: LotSummary;
   currency: string;
   amountMinor: number;
 }): void {

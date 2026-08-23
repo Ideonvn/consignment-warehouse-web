@@ -79,6 +79,21 @@ variable "ws_url" {
   }
 }
 
+variable "site_url" {
+  description = <<-EOT
+    Public origin of this app, e.g. "https://consignment-warehouse.com". Used as
+    Next's `metadataBase`, which is what makes a shared lot link's og:image and
+    og:url absolute. Get it wrong and previews silently stop rendering.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.site_url == "" || startswith(var.site_url, "https://")
+    error_message = "The site URL must be https, since it is the origin the app is served from."
+  }
+}
+
 variable "payment_instructions" {
   description = <<-EOT
     How a bidder pays, in the operator's own words. Shown on the account statement, on a

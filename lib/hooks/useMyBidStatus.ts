@@ -28,13 +28,15 @@ export type MyBidStatus = "leading" | "outbid" | "none" | "unknown";
  * `unknown`, and the caller says so out loud instead of quietly asserting a
  * falsehood about someone's own bids.
  */
-export function useMyBidStatus(): {
+export function useMyBidStatus(enabled = true): {
   statusFor: (lotId: string) => MyBidStatus;
   truncated: boolean;
 } {
   const { data } = useQuery({
     queryKey: [...queryKeys.myBids(false), LIMIT] as const,
     queryFn: () => listMyBids({ active_only: false, limit: LIMIT }),
+    // An anonymous visitor has no bids and no token to ask with.
+    enabled,
   });
 
   return useMemo(() => {
@@ -47,11 +49,12 @@ export function useMyBidStatus(): {
     return {
       truncated,
       statusFor: (lotId: string): MyBidStatus => {
+        if (!enabled) return "none";
         const row = byLot.get(lotId);
         if (row) return row.am_i_leading ? "leading" : "outbid";
         if (!data) return "unknown";
         return truncated ? "unknown" : "none";
       },
     };
-  }, [data]);
+  }, [data, enabled]);
 }

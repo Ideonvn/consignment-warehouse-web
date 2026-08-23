@@ -4,6 +4,44 @@ import type { User } from "@/types/api";
 
 export type SessionStatus = "loading" | "authenticated" | "anonymous";
 
+/**
+ * A hint that this device had a session recently. **Not authority** — it grants
+ * nothing and is never read by anything that decides access.
+ *
+ * It exists because the refresh cookie is HttpOnly on the API's own origin, so
+ * neither the server nor the client can tell whether a visitor is signed in
+ * until the refresh call returns. Without a hint, every shared link would have
+ * to pick one wrong first paint: a skeleton for the strangers this is built
+ * for, or a flash of the anonymous view for members. With it, each gets the
+ * loading state that matches them, and the worst case is the wrong one.
+ */
+const SESSION_HINT_KEY = "cw.had_session";
+
+export function noteSessionHint(): void {
+  try {
+    window.localStorage.setItem(SESSION_HINT_KEY, "1");
+  } catch {
+    // A blocked storage costs a nicer first paint, nothing else.
+  }
+}
+
+function clearSessionHint(): void {
+  try {
+    window.localStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+    // As above.
+  }
+}
+
+export function hadSessionRecently(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SESSION_HINT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 type SessionState = {
   status: SessionStatus;
   /** In memory only — never localStorage, which any injected script can read. */
@@ -20,7 +58,10 @@ export const useSession = create<SessionState>((set) => ({
   accessToken: null,
   user: null,
   setAccessToken: (accessToken) => set({ accessToken }),
-  setUser: (user) => set({ user, status: "authenticated" }),
+  setUser: (user) => {
+    noteSessionHint();
+    set({ user, status: "authenticated" });
+  },
   signIn: (accessToken, user) =>
     set({ accessToken, user, status: user ? "authenticated" : "loading" }),
   endSession: () => {
@@ -34,6 +75,10 @@ export const useSession = create<SessionState>((set) => ({
      * `DELETE /swipe` for a lot this user never touched.
      */
     clearBrowseSessions();
+    // Alongside the browse state, and for the same reason: this runs on a failed
+    // refresh too, not just the sign-out button, so the hint dies with the
+    // session rather than outliving it and choosing a skeleton forever.
+    clearSessionHint();
     set({ accessToken: null, user: null, status: "anonymous" });
   },
 }));
