@@ -8,7 +8,12 @@ is a separate repository and is not built here.** This app is the bidder's exper
 
 The product is a **stack of cards**, one per lot: swipe left to pass, swipe right to open the bid
 sheet. A second screen shows what you're bidding on and whether you're winning. Auction list, lot
-detail and profile are deliberately secondary — the stack is the product.
+detail and profile are deliberately secondary.
+
+The stack is the default and the identity, but it is **one of three ways to browse an auction** —
+cards, a list, and a photo gallery — chosen per device. See "Three layouts, one lot set". The stack
+is the only one with gestures; the other two exist because the card stack tested well without
+testing well for everyone.
 
 Everything below is real money in someone's hands. A user who is startled by what their tap
 committed them to does not come back.
@@ -158,9 +163,12 @@ you someone bid first.
 ## The four gestures, and the win
 
 Left is pass and right is bid — both recorded through `PUT /swipe`, both recoverable from My bids.
-**Up is skip, and it is deliberately not remembered**: no request, nothing persisted, the card moves
-to the back of the current stack and is back on the next load. It exists so someone can move past a
-lot without acquiring another list to manage. Do not "improve" it by saving it.
+**Up is skip, and it is deliberately not remembered**: no request, nothing stored on the server, the
+card moves to the back and is back on the next **reload**. It survives moving around inside the app
+— to lot detail, to the profile and back — because losing your place every time you looked at
+something would be worse than remembering it; it does not survive a refresh, because a skip is "not
+now", not a list to manage later. That lifetime is `lib/browse/browseSession.ts`, which is memory
+only. Do not "improve" it by persisting it.
 
 **Down is undo, the inverse of up** — up sets a lot aside, down brings the last one back, which is
 also the direction a list scrolls back. Both vertical gestures need a longer, faster pull than
@@ -207,6 +215,66 @@ presentation state, and the cost of being wrong is one repeated announcement, no
 The modal is app-wide so it lands wherever the user is, fires live off the closing time (socket
 events only reach lots the current screen subscribes to), and always answers "what now": the lots
 won with prices, the balance, the payment reference and how to collect.
+
+## Three layouts, one lot set
+
+Cards, list and gallery. The preference is **per device in `localStorage`** (`cw.browse_layout`),
+chosen once on first entry into an auction and changeable on `/profile` — the same treatment and the
+same reasoning as the theme, so do not add a user field or sync it.
+
+**All three render one set, and that set has one owner.** `useAuctionBrowse` is called *once*, by
+`AuctionBrowseScreen`, and handed to whichever layout is showing. It exposes `remaining` — the set,
+in lot-number order, for the list and the gallery — and `cards`, which is the same set re-ordered
+for the stack. If a layout ever computed its own membership, switching layout mid-browse would show
+a different auction, and there would be two filter models where there should be one.
+
+**Every layout goes through the same mutation path.** One `PUT /swipe`, one cache writer, and
+`useLotActions` for what a decision *means* on screen. A list button labelled "Bid" is a right swipe:
+it records `interested` and opens the sheet. **It is not a bid** — money still moves only on confirm.
+
+**Undo is shared and ordered.** One history across all three layouts, newest first, so a pass in the
+list and a skip in the stack rewind in the order they happened. Undoing a decision also
+**invalidates the lots query**: dropping the entry is only half the job, because a lot swiped before
+the last fetch is not in the pages the server built, and without the refetch the undo would delete
+the swipe and change nothing on screen.
+
+**The browse session is cleared when the session ends** (`endSession` → `clearBrowseSessions`). It
+is memory-only and would otherwise outlive a sign-out in the same tab: on a shared device the next
+person inherits the previous one's history, and an undo into an inherited entry sends
+`DELETE /swipe` for a lot they never touched.
+
+**"Open the stack at this tile" anchors to a lot *number*, never a lot.** The gallery hands over
+through `?at=<lot_number>` — in the URL so the back button returns to the grid — and the stack sorts
+by "is this lot number below the anchor" then by lot number. An anchor that pointed at the *element*
+would evaporate the moment its lot was resolved, which is the first thing the user does, and the
+stack would snap back to lot 1. As a threshold it also survives paging and puts an undone lot back
+in front. Lots before the anchor wrap to the end, so none becomes unreachable.
+
+**The list holds a resolved row's space for 320ms, and that is a timer, not an animation.** A row
+vanishing under a finger drops the next row's Pass button into the same pixels. Under
+`prefers-reduced-motion` the collapse goes and **the hold stays** — dropping the animation must never
+drop the protection. The row is inert the instant it is actioned, and the list announces the action
+to a screen reader, which a disappearing row otherwise does not.
+
+**The gallery restores its scroll by lot id and pixel offset, never by index.** The user goes to the
+stack to resolve lots, so the tile they left from is usually gone and every index after it has
+moved; on return it walks forward through the id order as it was to the first lot still present.
+
+**"Are you winning" in the list is a join, not a field.** `LotCardOut` carries no `am_i_leading`, so
+the list joins `/me/bids` (`active_only=false`, three states: absent, leading, outbid). That endpoint
+caps at 200 with no offset, so when the response is saturated an unmatched lot renders as **unknown**,
+never as "you never bid" — silently telling someone they have no bid on a lot they are losing is
+worse than admitting the app cannot tell.
+
+**The scrolling layouts page on scroll.** The stack pulls a page when it is nearly out of cards,
+which for a list or a grid would hide everything past the first 20 until the user resolved their way
+down to six. Both use a sentinel (`useLoadMoreOnScroll`). No virtualisation: measured at 250 lots —
+2,839 DOM nodes, median frame 13.3ms, one frame over 50ms — so it is not needed, and a windowing
+dependency would be paid for by every auction to fix a problem no auction has yet.
+
+**`touch-none`, the fixed action row and `--stack-actions-h` are stack-only.** The list and the
+gallery scroll, so they must not adopt any of them; they rely on `AppShell`'s bottom padding, and the
+list's undo bar is `sticky top-0` rather than fixed above the nav.
 
 ## Theming
 
@@ -431,6 +499,10 @@ Accepted, with reasons. Please don't re-raise them.
   `currency_code`, and `/me/swipes` spans auctions by design. The extra fetch is intentional: ZAR is
   expected to remain the only currency, so this costs one cached request rather than a schema
   change, and money still renders from the auction's own currency instead of a hardcoded symbol.
+- **`/me/bids` caps at 200 with no offset**, so the list's "Winning / Outbid" badge cannot be
+  resolved for a bidder with more than 200 bids. Those rows say so explicitly rather than guessing,
+  and the list shows a one-line notice. Fixing it properly needs paging on that endpoint; asserting
+  "no bid" would be a lie about someone's own money, which is why the unknown state exists.
 - **The theme preference is `localStorage` only, never synced to the backend.** Theme is genuinely
   per-device — the same person wants dark on a phone at night and light on a laptop in daylight — so
   syncing it across devices would be wrong behaviour, not a missing feature. Do not "fix" this by

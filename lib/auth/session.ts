@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { clearBrowseSessions } from "@/lib/browse/browseSession";
 import type { User } from "@/types/api";
 
 export type SessionStatus = "loading" | "authenticated" | "anonymous";
@@ -22,7 +23,19 @@ export const useSession = create<SessionState>((set) => ({
   setUser: (user) => set({ user, status: "authenticated" }),
   signIn: (accessToken, user) =>
     set({ accessToken, user, status: user ? "authenticated" : "loading" }),
-  endSession: () => set({ accessToken: null, user: null, status: "anonymous" }),
+  endSession: () => {
+    /*
+     * Browse state goes with the session, wherever the session ends — the
+     * profile's sign-out, a failed refresh, or bootstrap finding no cookie.
+     *
+     * It is memory-only, so it would otherwise outlive a sign-out in the same
+     * tab and the next person on a shared device would inherit the previous
+     * one's skips and undo history. Undoing into an inherited entry would send
+     * `DELETE /swipe` for a lot this user never touched.
+     */
+    clearBrowseSessions();
+    set({ accessToken: null, user: null, status: "anonymous" });
+  },
 }));
 
 export function getAccessToken(): string | null {

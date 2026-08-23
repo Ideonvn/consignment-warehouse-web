@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AuctionStackScreen } from "@/components/lot/AuctionStackScreen";
+import { AuctionBrowseScreen } from "@/components/lot/AuctionBrowseScreen";
 
 export const metadata: Metadata = {
   title: "The stack",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 
 export default async function AuctionStackPage(props: PageProps<"/auctions/[auctionId]">) {
   const { auctionId } = await props.params;
-  return <AuctionStackScreen auctionId={auctionId} />;
+  return <AuctionBrowseScreen auctionId={auctionId} />;
 }

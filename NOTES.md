@@ -247,6 +247,69 @@ scale pinned at 1.
 **Not covered:** no seeded lot in the auctions I drove has an empty `primary_image_url`, so the
 placeholder case was simulated by hiding the image rather than found in the data.
 
+## Three browsing layouts
+
+Cards, list and gallery over one lot set. No backend change and no new API field — the one thing
+that wanted a field is covered below.
+
+**What moved.** `useLotStack` became `useAuctionBrowse` (rename landed separately so this diff is
+readable) and is now called once by the screen rather than by `CardStack`, which is what lets three
+renderers share one set, one history and one `PUT /swipe` path. It grew `remaining` (the set, lot
+order) alongside `cards` (the stack's ordering of it), plus `openAt`, `hasMore` and `loadMore`.
+`CardStack` lost the hook call, the toast wiring and the bid sheet, and gained two props; its
+gestures, buttons and keys are untouched.
+
+**The history moved into a store** (`lib/browse/browseSession.ts`), keyed by auction. It had to: the
+layout switcher is on `/profile`, so switching means leaving the screen, and component state would
+have emptied the undo history and the skip order every time. Memory-only, so a reload still clears
+it — CLAUDE.md's skip wording was updated to describe the new lifetime rather than leave a rule the
+code no longer follows.
+
+**Judgement calls**
+
+- **First run asks on entering an auction, not after sign-in.** Mounting it app-wide would have put
+  the question over the auction list, where "cards", "list" and "gallery" have nothing to refer to.
+  Dismissing stores the default, so it is asked exactly once either way.
+- **`active_only=false` for the leading badge**, as instructed: absent / leading / outbid is three
+  states where `true` gives two and hides the useful one. The endpoint caps at 200 with no offset, so
+  full paging is impossible from the client; a saturated response renders unmatched lots as
+  **unknown** with a notice, never as "no bid".
+- **320ms hold on a resolved row**, driven by a timer with the animation layered on top, so reduced
+  motion keeps the protection.
+- **No virtualisation**, on a measurement rather than a hunch: 250 lots is 2,839 DOM nodes, a 22,107px
+  document, median frame 13.3ms and a single frame over 50ms (the first paint).
+
+**Two bugs found by driving it, not by reading it**
+
+1. **Undo across a layout switch deleted the swipe and changed nothing.** Dropping the history entry
+   is only half an undo — the lot also has to be back in the set, and the set comes from pages the
+   server built while the swipe still existed. Undo now invalidates the lots query. Caught by the
+   exact scenario in the brief: pass in the list, switch to cards, undo twice.
+2. **The list and the gallery only ever showed the first page.** Paging was triggered by the stack's
+   "fewer than six cards left", which for a layout showing everything at once means page two arrives
+   only after you have resolved 14 lots. Both scrolling layouts now page from a sentinel.
+
+**Verified against the running backend** (seeded auctions, live and scheduled):
+
+| Check | Result |
+|---|---|
+| Same set in every layout | Gallery and list rendered identical lot lists (20/20) across a round trip, with a lot passed in the list absent from both. |
+| Resolve in list → gallery → back | Sets agreed each time; the passed lot stayed gone. |
+| Undo across layouts | Pass lot 5 (list) → skip lot 6 (stack) → undo restored 6, then 5; Undo then disabled. Newest first, across two layouts. |
+| Open at a tile | `?at=12` opened the stack at lot 12 with 14 and 16 behind it — the next lots in order. |
+| Passing the anchor | Continued at 14, did not snap back to lot 1. |
+| Gallery reflow | Left from lot 16 at offset 166px, resolved it, returned: lot 17 sat at offset 166, scroll drift 0. |
+| Vanishing row | 80ms after a pass the row was still present, inert, and the button below had moved 0px; gone by 600ms; "Lot 1 passed" announced. |
+| Reduced motion | Same hold, transition disabled (1e-05s), row inert, 0px shift. |
+| Sign-out | Bidder A left a skip, signed out, bidder B signed in: Undo disabled, nothing inherited. |
+| 360×480, scheduled auction | Stack keeps its banner and all three buttons clear of the nav; list and gallery scroll with the last item clearing the nav by 26–27px; no horizontal overflow. |
+| Keyboard | List tab order is row → Pass → Bid → next row; the stack keeps its arrow keys. |
+| Scale | 250 lots paged in by scrolling, 20 → 250. |
+
+**Test data left behind:** two auctions created through the admin API — "Layouts Tight Case"
+(scheduled, 6 lots) and "Scale Test 250" (scheduled, 250 lots). Delete them when convenient; they
+exist only for the height and scale measurements.
+
 ## Backend surface adopted
 
 The backend was extended in response to the requests above, and the client workarounds they

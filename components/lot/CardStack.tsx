@@ -1,104 +1,56 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
-import type { LotCard, SwipeDirection } from "@/types/api";
-import { useLotStack } from "@/lib/hooks/useLotStack";
-import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
+import type { SwipeDirection } from "@/types/api";
+import type { AuctionBrowse } from "@/lib/hooks/useAuctionBrowse";
+import type { LotActions } from "@/lib/hooks/useLotActions";
 import { LotCardFace } from "@/components/lot/LotCardFace";
 import { SwipeCard, type CardExit } from "@/components/lot/SwipeCard";
-import { BidSheet } from "@/components/bid/BidSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useToast } from "@/components/ui/Toast";
 import { Countdown } from "@/components/ui/Countdown";
 
 /** Cards rendered behind the top one, so the stack reads as a stack. */
 const DEPTH = 3;
-/** Lots kept subscribed: the visible ones plus the next few. */
-const SUBSCRIBE_AHEAD = 8;
 
 export function CardStack({
-  auctionId,
+  stack,
+  actions,
   currency,
   biddingOpen,
   opensAt,
 }: {
-  auctionId: string;
+  /** The shared lot set, owned by the screen so every layout agrees on it. */
+  stack: AuctionBrowse;
+  /** The shared swipe behaviour — one `PUT /swipe` path for all three layouts. */
+  actions: LotActions;
   currency: string;
   /** False before the auction opens: browse and save, but no money moves. */
   biddingOpen: boolean;
   opensAt?: string;
 }) {
   const router = useRouter();
-  const { showToast } = useToast();
-
-  const onStackError = useCallback(
-    (message: string) => showToast({ title: message, tone: "danger" }),
-    [showToast],
-  );
-
-  const stack = useLotStack(auctionId, onStackError);
   const [exitDirection, setExitDirection] = useState<CardExit>("pass");
-  const [bidLot, setBidLot] = useState<LotCard | null>(null);
-  const busy = useRef(false);
 
-  const decide = useCallback(
-    (lot: LotCard, direction: SwipeDirection) => {
-      if (busy.current) return;
-      busy.current = true;
-      setExitDirection(direction);
+  const decide = (lot: Parameters<LotActions["decide"]>[0], direction: SwipeDirection) => {
+    setExitDirection(direction);
+    actions.decide(lot, direction);
+  };
 
-      // A swipe right records intent; only the sheet takes money. Before the
-      // auction opens there is no sheet to show — the interest is still saved.
-      if (direction === "interested") {
-        if (biddingOpen) {
-          setBidLot(lot);
-        } else {
-          showToast({
-            title: "Saved to Interested",
-            description: "Bidding hasn't opened on this auction yet — we'll keep it for you.",
-            tone: "neutral",
-          });
-        }
-      }
+  const skip = (lot: Parameters<LotActions["skip"]>[0]) => {
+    setExitDirection("skip");
+    actions.skip(lot);
+  };
 
-      void stack.decide(lot, direction).finally(() => {
-        busy.current = false;
-      });
-    },
-    [stack, biddingOpen, showToast],
-  );
-
-  /** Not a decision: the card goes to the back and nothing is recorded. */
-  const skip = useCallback(
-    (lot: LotCard) => {
-      if (busy.current) return;
-      setExitDirection("skip");
-      stack.skip(lot);
-    },
-    [stack],
-  );
-
-  const undo = useCallback(() => {
-    void stack.undo().then((restored) => {
-      if (restored) showToast({ title: `Lot ${restored.lot_number} is back`, tone: "neutral" });
-    });
-  }, [stack, showToast]);
+  const undo = actions.undo;
 
   const top = stack.cards[0] ?? null;
   const behind = stack.cards.slice(1, DEPTH);
-
-  // Live updates for what's on screen and just behind it, nothing more.
-  useLotSubscription(
-    stack.cards
-      .slice(0, SUBSCRIBE_AHEAD)
-      .map((lot) => ({ id: lot.id, sequence: lot.bid_sequence })),
-  );
 
   if (stack.isPending) return <StackSkeleton />;
   if (stack.error && stack.cards.length === 0) {
@@ -257,13 +209,6 @@ export function CardStack({
           </div>
         </div>
       </div>
-
-      <BidSheet
-        lot={bidLot}
-        currency={currency}
-        open={bidLot !== null}
-        onClose={() => setBidLot(null)}
-      />
     </div>
   );
 }

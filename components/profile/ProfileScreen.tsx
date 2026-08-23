@@ -13,6 +13,7 @@ import { PhoneColumn } from "@/components/layout/PhoneColumn";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
 import { ThemeSetting } from "@/components/theme/ThemeSetting";
+import { LayoutSetting } from "@/components/browse/LayoutSetting";
 import { AccountSummaryLink } from "@/components/account/AccountSummaryLink";
 import { EmailVerification } from "@/components/profile/EmailVerification";
 import { MarketingPreferences } from "@/components/profile/MarketingPreferences";
@@ -61,6 +62,7 @@ export function ProfileScreen() {
     } finally {
       disconnectRealtime();
       queryClient.clear();
+      // `endSession` also clears the browse session — see lib/auth/session.ts.
       endSession();
       setSigningOut(false);
       router.replace("/login");
@@ -108,6 +110,10 @@ export function ProfileScreen() {
 
       <div className="mt-6">
         <AccountSummaryLink />
+      </div>
+
+      <div className="mt-6">
+        <LayoutSetting />
       </div>
 
       <div className="mt-6">
