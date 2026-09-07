@@ -48,7 +48,7 @@ export function WelcomeForm() {
       <PhoneColumn>
         <h1 className="text-3xl font-semibold tracking-tight">What should we call you?</h1>
         <p className="mt-2 text-text-muted">
-          Other bidders only ever see a pseudonym — this is for us.
+          Other bidders only see a handle like Bidder 872072 — this is for us.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4" noValidate>

@@ -130,7 +130,7 @@ export function ProfileScreen() {
       </div>
 
       <p className="mt-6 text-center text-xs text-text-muted">
-        Bidders only ever see your pseudonymous handle, never your name or number.
+        Other bidders only ever see a handle like Bidder 872072 — never your name or number.
       </p>
     </PhoneColumn>
   );
