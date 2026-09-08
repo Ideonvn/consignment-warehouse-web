@@ -16,8 +16,6 @@ import type {
   notificationChannelSchema,
   notificationPreferenceSchema,
   serverMessageSchema,
-  swipeDirectionSchema,
-  swipeSchema,
   tokenPairSchema,
   userSchema,
   wsTicketSchema,
@@ -49,9 +47,6 @@ export type LotCard = z.infer<typeof lotCardSchema>;
 export type LotDetail = z.infer<typeof lotDetailSchema>;
 export type LotImage = z.infer<typeof lotImageSchema>;
 export type LotStatus = z.infer<typeof lotStatusSchema>;
-
-export type SwipeDirection = z.infer<typeof swipeDirectionSchema>;
-export type Swipe = z.infer<typeof swipeSchema>;
 
 export type Bid = z.infer<typeof bidSchema>;
 export type BidStatus = z.infer<typeof bidStatusSchema>;
@@ -92,9 +87,10 @@ export type PublicLotPrice = z.infer<typeof publicLotPriceSchema>;
 /**
  * What a presentational lot component actually needs.
  *
- * Both `LotCard` and `PublicLotCard` satisfy this, which is how the gallery, the
- * list and the card face serve both modes without being told which one they are
- * in. Widen it only with fields that exist on *both* sides.
+ * Both `LotCard` and `PublicLotCard` satisfy this, which is how one `LotList`
+ * serves a member and a stranger without being told which it is looking at.
+ * Widen it only with fields that exist on *both* sides — `my_auto_bid_max_minor`
+ * and `am_i_leading` are member-only and deliberately absent here.
  */
 export type LotSummary = Pick<
   LotCard,

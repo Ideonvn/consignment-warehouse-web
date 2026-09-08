@@ -72,7 +72,7 @@ function ShortfallPanel({
       </div>
 
       <p className="mt-4 text-center text-xs text-text-muted">
-        Nothing was bid. You can keep browsing and swiping in the meantime.
+        Nothing was bid. You can keep browsing in the meantime.
       </p>
     </div>
   );
@@ -128,7 +128,7 @@ export function BidResultPanel({
       {result.extended ? (
         <p className="mt-3 text-xs text-text-muted">
           A late bid extended this lot — it now closes{" "}
-          <Countdown endsAt={result.effective_ends_at} prefix="in" className="text-text" />.
+          <Countdown endsAt={result.effective_ends_at} prefix="in" className="text-text" plain />.
         </p>
       ) : null}
 

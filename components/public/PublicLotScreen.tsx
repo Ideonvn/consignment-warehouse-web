@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getPublicAuction, getPublicLot } from "@/lib/api/publicEndpoints";
 import { ApiError } from "@/lib/api/errors";
 import { noteSeen, wasSeen } from "@/lib/public/seen";
-import { isLotOpen } from "@/lib/format/time";
+import { formatRemaining, isLotOpen } from "@/lib/format/time";
 import { lotOutcome } from "@/lib/format/lotStatus";
 import { useNow } from "@/lib/hooks/useTicker";
 import { LotGallery } from "@/components/lot/LotGallery";
@@ -37,7 +37,7 @@ export function PublicLotScreen({ lotId }: { lotId: string }) {
 
   // The lot payload names its auction but not the currency, so this resolves it
   // — one cached request, shared with the auction screen's own query. The same
-  // trade NOTES.md records for the swiped lists.
+  // trade NOTES.md records elsewhere.
   const { data: auction } = useQuery({
     queryKey: ["public", "auction", lot?.auction_id],
     queryFn: () => getPublicAuction(lot!.auction_id),
@@ -72,6 +72,7 @@ export function PublicLotScreen({ lotId }: { lotId: string }) {
   }
 
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
+  const urgent = open && now !== null && formatRemaining(lot.effective_ends_at, now).urgent;
   const notYetOpen = lot.status === "scheduled";
   const hasBids = lot.current_bid_minor !== null && lot.bid_count > 0;
   const outcome = notYetOpen
@@ -85,9 +86,11 @@ export function PublicLotScreen({ lotId }: { lotId: string }) {
       <PhoneColumn className="pb-8">
         <div className="flex items-center justify-between gap-2 pt-4">
           <StatusPill>Lot {lot.lot_number}</StatusPill>
-          {open ? (
+          {open && urgent ? (
+            <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
+          ) : open ? (
             <StatusPill tone="live" pulse>
-              <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
+              <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" plain />
             </StatusPill>
           ) : notYetOpen ? (
             <StatusPill>Not open yet</StatusPill>

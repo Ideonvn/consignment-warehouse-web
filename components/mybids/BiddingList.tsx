@@ -106,7 +106,7 @@ export function BiddingList() {
       {rows.length === 0 ? (
         <EmptyState
           title="No bids yet"
-          description="Swipe right on a lot you want and set your maximum. We'll bid for you."
+          description="Find a lot you want and set your maximum. We'll bid for you."
           action={
             <Link
               href="/"

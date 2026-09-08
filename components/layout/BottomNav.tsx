@@ -16,7 +16,7 @@ type Tab = {
 const TABS: Tab[] = [
   {
     href: "/",
-    label: "Stack",
+    label: "Auctions",
     matches: ["/auctions", "/lots"],
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>

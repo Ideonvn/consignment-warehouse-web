@@ -9,7 +9,6 @@ import {
   lotCardListSchema,
   lotDetailSchema,
   myBidListSchema,
-  swipeSchema,
   tokenPairSchema,
   userSchema,
   wsTicketSchema,
@@ -24,8 +23,6 @@ import type {
   LotDetail,
   MyBid,
   NotificationChannel,
-  Swipe,
-  SwipeDirection,
   TokenPair,
   User,
   WsTicket,
@@ -109,6 +106,10 @@ export function setNotificationPreferences(
 
 /* ------------------------------------------------------------ auctions --- */
 
+/**
+ * **The server already excludes anything that ended more than two weeks ago.**
+ * Do not filter for that here — one copy of the rule, on the side that owns it.
+ */
 export function listAuctions(params: {
   status?: AuctionStatus;
   limit?: number;
@@ -125,12 +126,7 @@ export function getAuction(auctionId: string): Promise<Auction> {
 
 export function listLots(
   auctionId: string,
-  params: {
-    include_swiped?: boolean;
-    direction?: SwipeDirection;
-    cursor?: number;
-    limit?: number;
-  } = {},
+  params: { cursor?: number; limit?: number } = {},
 ): Promise<ApiResult<LotCard[]>> {
   return apiRequest(`/auctions/${auctionId}/lots`, {
     schema: lotCardListSchema,
@@ -147,30 +143,6 @@ export function listBids(
   params: { cursor?: number; limit?: number } = {},
 ): Promise<ApiResult<Bid[]>> {
   return apiRequest(`/lots/${lotId}/bids`, { schema: bidListSchema, query: params });
-}
-
-/* -------------------------------------------------------------- swipes --- */
-
-export function setSwipe(lotId: string, direction: SwipeDirection): Promise<Swipe> {
-  return apiGet(`/lots/${lotId}/swipe`, {
-    method: "PUT",
-    body: { direction },
-    schema: swipeSchema,
-  });
-}
-
-export function deleteSwipe(lotId: string): Promise<void> {
-  return apiGet(`/lots/${lotId}/swipe`, { method: "DELETE" });
-}
-
-/**
- * Every lot this user has swiped, across auctions, most-recently-swiped first.
- * Same card shape as the stack, so rows render directly.
- */
-export function listMySwipes(
-  params: { direction?: SwipeDirection; limit?: number; offset?: number } = {},
-): Promise<LotCard[]> {
-  return apiGet("/me/swipes", { schema: lotCardListSchema, query: params });
 }
 
 /* ------------------------------------------------------------- bidding --- */
@@ -205,6 +177,11 @@ export function cancelAutoBid(lotId: string): Promise<void> {
   return apiGet(`/lots/${lotId}/auto-bid`, { method: "DELETE" });
 }
 
+/**
+ * Every lot this user has money on. **The server already excludes anything whose
+ * auction ended more than two weeks ago** — never filter for that again here: a
+ * second copy of the rule is a second thing to keep in step.
+ */
 export function listMyBids(
   params: { active_only?: boolean; limit?: number } = {},
 ): Promise<MyBid[]> {

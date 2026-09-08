@@ -42,6 +42,10 @@ import { uuid } from "@/lib/utils/uuid";
 /**
  * One number: the most you are willing to pay.
  *
+ * **One editable field and nothing else.** There were +1/+2/+5 increment chips
+ * under the input; stakeholders found them noisy, so they are gone — the field
+ * tracks the server's minimum until the user types over it.
+ *
  * The backend stores every bid as a proxy ceiling, so hiding that mechanic
  * produces users who feel tricked when the price climbs on its own. The sheet
  * states it plainly and recomputes the live consequence as they type.
@@ -110,12 +114,6 @@ function BidSheetBody({
   const closed = outcome?.kind === "closed" || hasEnded(endsAt, now ?? 0);
 
   const amountMinor = parseMoneyInput(value);
-
-  // Increment chips follow the server's own step, whatever band the price is in.
-  const step = useMemo(() => {
-    const gap = minimum - (currentBid ?? lot.starting_price_minor);
-    return gap > 0 ? gap : Math.max(10_000, Math.round(minimum * 0.05));
-  }, [minimum, currentBid, lot.starting_price_minor]);
 
   const validationError = useMemo(() => {
     if (amountMinor === null) return null;
@@ -252,22 +250,6 @@ function BidSheetBody({
               aria-invalid={validationError ? true : undefined}
               className="tabular min-h-16 w-full bg-transparent text-3xl font-semibold outline-none"
             />
-          </div>
-
-          <div className="mt-3 flex gap-2">
-            {[1, 2, 5].map((multiple) => {
-              const target = (amountMinor ?? minimum) + step * multiple;
-              return (
-                <button
-                  key={multiple}
-                  type="button"
-                  onClick={() => setTyped(toMajorInputValue(target))}
-                  className="tabular min-h-11 flex-1 rounded-full border border-border bg-surface-raised text-sm font-medium hover:border-accent/50"
-                >
-                  +{formatMoney(step * multiple, currency)}
-                </button>
-              );
-            })}
           </div>
 
           {validationError ? (

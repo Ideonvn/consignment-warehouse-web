@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
@@ -12,24 +11,19 @@ import { Countdown } from "@/components/ui/Countdown";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LotImage } from "@/components/ui/LotImage";
 import { Money } from "@/components/ui/Money";
+import { formatMoney } from "@/lib/format/money";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils/cn";
-import type { LotSummary } from "@/types/api";
+import type { LotCard, LotSummary } from "@/types/api";
 
 /**
- * How long a resolved row keeps its space before the list closes up.
+ * The auction, and the whole product.
  *
- * This is the mis-tap guard, and it is a **timer, not an animation**. A row
- * vanishing under a finger drops whatever was below it into the same pixels, and
- * on a list the next thing down is another lot's Pass button. Holding the space
- * means the tap that was already on its way lands on nothing.
- *
- * Deliberately not conditioned on `prefers-reduced-motion`: dropping the
- * animation must not drop the protection, so reduced motion loses the collapse
- * and keeps the delay.
+ * Two buttons a row: the most you'll pay, and bid this amount now. **There is no
+ * pass** — passing was half of a swipe model that no longer exists — and nothing
+ * ever leaves this list because of something the user did. A lot goes when it
+ * ends, and that is the only reason.
  */
-const HOLD_MS = 320;
-
 export function LotList({
   lots,
   actions,
@@ -39,7 +33,6 @@ export function LotList({
   isFetchingMore,
   hasMore,
   loadMore,
-  canUndo,
 }: {
   lots: LotSummary[];
   /**
@@ -54,66 +47,24 @@ export function LotList({
   isFetchingMore: boolean;
   hasMore: boolean;
   loadMore: () => void;
-  canUndo?: boolean;
 }) {
   const { statusFor, truncated } = useMyBidStatus(Boolean(actions));
   const sentinel = useLoadMoreOnScroll(hasMore, loadMore);
-  /*
-   * Snapshots of rows that have been actioned but are still holding their space.
-   *
-   * They have to be snapshots: `decide` removes the lot from `lots`
-   * immediately — that optimism is what makes the action feel instant — so by
-   * the time this renders there is no live lot left to hold a space for.
-   */
-  const [leaving, setLeaving] = useState<LotSummary[]>([]);
-  const [announcement, setAnnouncement] = useState("");
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      for (const timer of pending.values()) clearTimeout(timer);
-      pending.clear();
-    };
-  }, []);
-
-  function hold(lot: LotSummary, direction: "pass" | "interested") {
-    setLeaving((current) =>
-      current.some((held) => held.id === lot.id) ? current : [...current, lot],
-    );
-    // A row leaving is invisible to a screen reader; the toast only covers some
-    // of these paths, so the list says what happened itself.
-    setAnnouncement(
-      direction === "pass" ? `Lot ${lot.lot_number} passed` : `Lot ${lot.lot_number} saved`,
-    );
-    const timer = setTimeout(() => {
-      setLeaving((current) => current.filter((held) => held.id !== lot.id));
-      timers.current.delete(lot.id);
-    }, HOLD_MS);
-    timers.current.set(lot.id, timer);
-  }
 
   if (isPending) return <ListSkeleton />;
 
-  const liveIds = new Set(lots.map((lot) => lot.id));
-  // An undo inside the hold window puts the lot back in the set; the held ghost
-  // is dropped rather than rendered alongside the real row.
-  const held = leaving.filter((lot) => !liveIds.has(lot.id));
-  const heldIds = new Set(held.map((lot) => lot.id));
-  const rows = [...lots, ...held].sort((a, b) => a.lot_number - b.lot_number);
-
-  if (rows.length === 0) {
+  if (lots.length === 0) {
     return (
       <div className="mx-auto w-full max-w-(--app-width) px-4 pb-8">
         <EmptyState
-          title="That's every lot"
-          description="You've been through the whole auction. Changed your mind about one?"
+          title="Nothing here yet"
+          description="This auction has no lots to show right now."
           action={
             <Link
-              href="/my-bids?view=passed"
+              href="/"
               className="inline-flex min-h-11 items-center rounded-full border border-accent-edge bg-accent px-5 font-semibold text-accent-ink"
             >
-              See what you passed
+              Back to auctions
             </Link>
           }
         />
@@ -123,21 +74,9 @@ export function LotList({
 
   return (
     <div className="mx-auto w-full max-w-(--app-width) px-4 pb-8">
-      {/* Sticky, not fixed: this list scrolls, so an undo pinned over the bottom
-          nav would fight the content. Undo has to be visible here — a one-tap
-          destructive action with no way back is how someone loses a lot. */}
-      <div className="sticky top-0 z-10 -mx-4 mb-2 flex items-center justify-between gap-3 border-b border-border bg-bg/95 px-4 py-2 backdrop-blur">
-        <p className="text-xs text-text-muted">
-          {lots.length} {lots.length === 1 ? "lot" : "lots"}
-          {actions ? " left" : ""}
-        </p>
-        {/* No actions, no Undo — and no disabled Undo either. */}
-        {actions ? (
-          <Button variant="ghost" disabled={!canUndo} onClick={actions.undo}>
-            Undo
-          </Button>
-        ) : null}
-      </div>
+      <p className="py-2 text-xs text-text-muted">
+        {lots.length} {lots.length === 1 ? "lot" : "lots"}
+      </p>
 
       {truncated ? (
         <p className="mb-2 rounded-xl border border-border bg-surface-raised px-3 py-2 text-xs text-text-muted">
@@ -147,30 +86,18 @@ export function LotList({
       ) : null}
 
       <ul className="flex flex-col gap-2">
-        {rows.map((lot) => (
+        {lots.map((lot) => (
           <li key={lot.id}>
             <LotRow
               lot={lot}
               currency={currency}
               biddingOpen={biddingOpen}
               bidStatus={statusFor(lot.id)}
-              leaving={heldIds.has(lot.id)}
-              onDecide={
-                actions
-                  ? (direction) => {
-                      hold(lot, direction);
-                      actions.decide(lot, direction);
-                    }
-                  : undefined
-              }
+              actions={actions}
             />
           </li>
         ))}
       </ul>
-
-      <p role="status" aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
 
       <div ref={sentinel} aria-hidden className="h-px" />
       {isFetchingMore ? <Skeleton className="mt-2 h-24 w-full rounded-2xl" /> : null}
@@ -187,53 +114,61 @@ const BID_STATUS: Record<MyBidStatus, { label: string; className: string } | nul
   unknown: { label: "Bid status unknown", className: "text-text-muted" },
 };
 
+/**
+ * `my_auto_bid_max_minor` is on the *member* card shape only, so this reads it
+ * structurally rather than widening `LotSummary` — which both the member and the
+ * public card have to satisfy. An anonymous row has no buttons anyway.
+ */
+function autoBidMax(lot: LotSummary): number | null {
+  return (lot as Partial<LotCard>).my_auto_bid_max_minor ?? null;
+}
+
 function LotRow({
   lot,
   currency,
   biddingOpen,
   bidStatus,
-  leaving,
-  onDecide,
+  actions,
 }: {
   lot: LotSummary;
   currency: string;
   biddingOpen: boolean;
   bidStatus: MyBidStatus;
-  leaving: boolean;
   /** Absent for an anonymous visitor: the row then has no buttons at all. */
-  onDecide?: (direction: "pass" | "interested") => void;
+  actions?: LotActions;
 }) {
   const now = useNow();
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
   const hasBids = lot.current_bid_minor !== null && lot.bid_count > 0;
   const status = BID_STATUS[bidStatus];
+  const hasMax = autoBidMax(lot) !== null;
+  const canBid = Boolean(actions) && biddingOpen && open;
+  const submitting = actions?.isSubmitting(lot.id) ?? false;
 
   return (
-    <article
-      // The row is inert the instant it is actioned, so the space it is holding
-      // cannot be tapped and a double tap cannot fire twice.
-      aria-hidden={leaving || undefined}
-      className={cn(
-        "overflow-hidden rounded-2xl border border-border bg-surface transition-[opacity,transform] duration-300 motion-reduce:transition-none",
-        leaving && "pointer-events-none scale-[0.98] opacity-40",
-      )}
-    >
+    <article className="overflow-hidden rounded-2xl border border-border bg-surface">
       <Link href={`/lots/${lot.id}`} className="flex gap-3 p-3">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
           <LotImage src={lot.primary_image_url} alt={lot.title} sizes="80px" />
         </div>
 
         <div className="min-w-0 flex-1">
+          {/*
+           * The lot number, top-right and large.
+           *
+           * Testers could not find it when it was a muted line under the title,
+           * and it is how people refer to lots out loud and in messages — so it
+           * is the second thing you see after the photograph. It sits in the
+           * space the title already leaves, on the same first line, so the row
+           * does not get taller: the title truncates instead.
+           */}
           <div className="flex items-start justify-between gap-2">
             <p className="truncate text-sm font-semibold">{lot.title}</p>
-            {status ? (
-              <span className={cn("shrink-0 text-xs font-semibold", status.className)}>
-                {status.label}
-              </span>
-            ) : null}
+            <p className="tabular shrink-0 text-xl leading-none font-bold">
+              <span className="sr-only">Lot </span>
+              {lot.lot_number}
+            </p>
           </div>
-
-          <p className="mt-0.5 text-xs text-text-muted">Lot {lot.lot_number}</p>
 
           <p className="tabular mt-1 text-base font-semibold">
             <Money minor={hasBids ? (lot.current_bid_minor ?? 0) : lot.starting_price_minor} currency={currency} />
@@ -242,43 +177,48 @@ function LotRow({
             </span>
           </p>
 
-          <p className="mt-0.5 text-xs text-text-muted">
+          {/* `min-h-6` reserves the final-minute alarm's height up front, so a lot
+              crossing into its last minute changes no layout and cannot push the
+              buttons below it off a short screen. */}
+          <div className="mt-1 flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
             {open ? (
               <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
             ) : lot.status === "scheduled" ? (
-              "Not open yet"
+              <span>Not open yet</span>
             ) : (
-              "Bidding closed"
+              <span>Bidding closed</span>
             )}
-          </p>
+            {status ? (
+              <span className={cn("font-semibold", status.className)}>{status.label}</span>
+            ) : null}
+          </div>
         </div>
       </Link>
 
-      {onDecide ? (
+      {actions ? (
         <div className="flex gap-2 border-t border-border px-3 py-2">
           <Button
             variant="secondary"
-            aria-label={`Pass on lot ${lot.lot_number}, ${lot.title}`}
-            disabled={leaving}
-            onClick={() => onDecide("pass")}
             className="flex-1"
+            disabled={!canBid}
+            onClick={() => actions.openSheet(lot)}
+            aria-label={`${hasMax ? "Raise" : "Enter"} your maximum on lot ${lot.lot_number}, ${lot.title}`}
           >
-            Pass
+            {hasMax ? "Raise Maximum" : "Enter Maximum"}
           </Button>
+          {/*
+           * Pressing this places the bid. No sheet, no confirmation, no delay —
+           * so the amount has to be on the button itself, and it is the server's
+           * own `minimum_next_bid_minor`, never a figure computed here.
+           */}
           <Button
-            aria-label={
-              biddingOpen && open
-                ? `Bid on lot ${lot.lot_number}, ${lot.title}`
-                : `Save lot ${lot.lot_number}, ${lot.title}, as interested`
-            }
-            disabled={leaving}
-            onClick={() => onDecide("interested")}
             className="flex-1"
+            disabled={!canBid}
+            loading={submitting}
+            onClick={() => actions.bidNow(lot, currency)}
+            aria-label={`Bid ${formatMoney(lot.minimum_next_bid_minor, currency)} on lot ${lot.lot_number}, ${lot.title}`}
           >
-            {/* The ellipsis is the difference from the stack, where a right swipe
-                commits after a cancel window. Here the button opens the sheet and
-                money moves only on confirm — the label has to promise that. */}
-            {biddingOpen && open ? "Bid…" : "Interested"}
+            Bid <Money minor={lot.minimum_next_bid_minor} currency={currency} />
           </Button>
         </div>
       ) : null}

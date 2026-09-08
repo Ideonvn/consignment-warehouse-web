@@ -9,12 +9,12 @@ import { Sheet } from "@/components/ui/Sheet";
 export type OneTapOutcome = { outcome: BidOutcome; currency: string; lotNumber: number };
 
 /**
- * What a one-tap bid landed on.
+ * What a one-press bid landed on.
  *
- * The sheet does the talking because by the time the request is made the card has
- * been gone for five seconds — there is nothing to spring back. A refused bid
- * un-records its swipe and puts the lot back in the stack, so this explains what
- * happened and the lot is there to act on again.
+ * The bid button places the bid immediately — no sheet in front of it and no
+ * cancel window behind it — so this is the only thing that can explain a
+ * refusal, and it has nowhere to hide. The lot never leaves the list, so
+ * whatever went wrong can be acted on again straight away.
  */
 export function BidOutcomeSheet({
   state,
@@ -58,13 +58,16 @@ function Body({
     outcome.kind === "closed"
       ? {
           title: "That lot closed",
-          body: "Its clock ran out before the bid went in, so nothing was placed and nothing was charged.",
+          // Not necessarily the clock: a 409 is also a lot withdrawn or
+          // cancelled out from under a page that still shows it live. Say what
+          // is certain — no bid, no charge — rather than guessing the cause.
+          body: "It stopped accepting bids before this one went in, so nothing was placed and nothing was charged.",
         }
       : outcome.kind === "too-low"
         ? {
             title: "Someone bid first",
             // Straight from the server's 422 — never computed here.
-            body: `The minimum is now ${formatMoney(outcome.minimumNextBidMinor, currency)}. Lot ${lotNumber} is back in your stack if you still want it.`,
+            body: `The minimum is now ${formatMoney(outcome.minimumNextBidMinor, currency)}. Lot ${lotNumber} is still in the list if you want it at that price.`,
           }
         : {
             title: "That bid didn't go through",

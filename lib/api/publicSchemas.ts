@@ -6,8 +6,8 @@ import { auctionStatusSchema, lotStatusSchema } from "@/lib/api/schemas";
  *
  * Separate schemas from the authenticated ones, mirroring the backend's split
  * and for the same reason: **these shapes have no per-user fields at all** — no
- * `my_swipe`, no `am_i_leading`, no `my_auto_bid_max_minor`, absent rather than
- * null. A component handed one of these cannot render a member affordance,
+ * `am_i_leading`, no `my_auto_bid_max_minor`, absent rather than null. A
+ * component handed one of these cannot render a member affordance,
  * because there is no field to read and no branch to forget.
  *
  * Only `reserve_met` is exposed, never a reserve amount.

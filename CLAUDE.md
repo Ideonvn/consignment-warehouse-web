@@ -6,19 +6,21 @@ The bidder-facing half of an auction platform replacing a business that ran insi
 the owner posted a photo, people bid in the thread, an admin closed it by hand. **The admin portal
 is a separate repository and is not built here.** This app is the bidder's experience only.
 
-The product is a **stack of cards**, one per lot: swipe left to pass, swipe right to open the bid
-sheet. A second screen shows what you're bidding on and whether you're winning. Auction list, lot
-detail and profile are deliberately secondary.
+The product is a **list of lots**, one row each: the amount it takes to lead, on a button that
+places that bid when you press it, and beside it the sheet where you set the most you will pay. A
+second screen shows what you're bidding on and whether you're winning. Auction list, lot detail and
+profile are deliberately secondary.
 
-The stack is the default and the identity **for a signed-in bidder**, and one of three ways to
-browse an auction — anonymous visitors get the gallery and the list only, for the reason in
-"Anonymous browsing". It is
-cards, a list, and a photo gallery — chosen per device. See "Three layouts, one lot set". The stack
-is the only one with gestures; the other two exist because the card stack tested well without
-testing well for everyone.
+**This was a stack of swipeable cards, and that is the single biggest thing to know about this
+repository's history.** Swipe left to pass, swipe right to bid, up to skip, down to undo; three
+layouts to choose between; a five-second window in which a swiped bid could be cancelled. The first
+live stakeholder session found all of it too complex. The direction is now **fewest buttons, fewest
+options, fewest taps to place a bid**, and the sections below say what each reversed rule used to be
+and why it no longer holds, rather than quietly reading as though it never existed.
 
 Everything below is real money in someone's hands. A user who is startled by what their tap
-committed them to does not come back.
+committed them to does not come back — and since the cancel window is gone, the tap *is* the
+commitment, which raises the stakes on saying clearly what a button will do.
 
 ## Stack, and why each piece is here
 
@@ -31,7 +33,12 @@ Locked decisions. Don't swap them out without a reason that survives the one bel
   and socket events all write into the same cache, so no component needs its own socket wiring.
 - **zustand** — the two things that aren't server state: the auth session and the realtime
   connection status / per-lot sequence cursors. No provider ceremony.
-- **framer-motion** — the gesture layer is the product; hand-rolled drag physics is how it dies.
+- **framer-motion** — **its original justification is gone.** It was here because "the gesture layer
+  is the product and hand-rolled drag physics is how it dies"; there are no gestures any more. It
+  survives on a much smaller brief: the sheet's slide-up, the toast, the connection banner and the
+  win modal (`Sheet`, `Toast`, `ConnectionBanner`, `WinCelebration` — four files, and the only four).
+  That is a weaker reason than the one it was admitted on, so treat it as a **candidate for removal**
+  rather than as a settled part of the stack: those four transitions are within reach of CSS.
 - **zod** — validates every response at the boundary. `types/api.ts` is `z.infer` over those
   schemas, so a backend change surfaces as one clear parse error instead of `undefined` three
   components deep. Change the schema, not the type.
@@ -44,28 +51,29 @@ Locked decisions. Don't swap them out without a reason that survives the one bel
 
 Each of these has a consequence attached. They are not style preferences.
 
-**A swipe right on the stack commits a bid — after a five-second cancel window.** The gesture is
-the intent; the window is the confirmation. Nothing is sent during it: this is a delay before
-`POST /bids`, not an optimistic write that is undone afterwards, so a mis-swipe costs nothing
-because the request was never made.
+**A bid is placed the moment the button is pressed.** No sheet in front of it, no confirmation
+after it, no delay. `POST /bids` goes out on the press.
 
-**This replaced "a swipe right is NOT a bid", and the protection moved rather than disappeared.**
-The old rule existed because an accidental thumb must not spend someone's rent, and that is still
-true — there is no bid retraction API, and the only way to unmake a placed bid is an operator
-voiding it, which posts ledger reversals. So the window *is* the safety property: it must never
-become configurable to zero, and the gesture must never ship without it.
+**This reverses a documented safety property, deliberately.** There used to be a five-second cancel
+window between the gesture and the request — nothing was sent during it, so a mis-swipe cost
+nothing because the request was never made. It existed because **there is no bid retraction API**,
+and the only way to unmake a placed bid is an operator voiding it, which posts ledger reversals.
+That fact has not changed. What changed is the judgement: stakeholders found the delay confusing —
+a bid that has visibly not happened yet, with a countdown on it — and wanted the press to be the
+bid. So the protection was **removed, not moved**, and the honest description of the trade is: a
+mis-tap is now irreversible where it previously was not, and that was accepted in exchange for
+immediacy. Two things still stand between a tap and a wrong bid, and both must survive: the button
+carries the actual amount so the commitment is legible before the press, and it is a single-purpose
+button in a row, not a whole-viewport gesture.
 
-The specifics, each load-bearing: the bid is exactly the server's `minimum_next_bid_minor` with **no
-maximum** (raising is offered when the user is outbid, which is the moment its value is obvious); a
-lot the user has already bid on opens the sheet instead, and so does a lot whose bid status is
-unknown, because when we cannot tell we do not bid automatically; at most one bid is ever pending,
-and any deliberate next action — another swipe, opening the sheet, a pass — sends it rather than
-queueing behind it; **hiding the tab cancels it**, because a phone call or a lock screen is not a
-decision the user made, and cancelling costs only immediacy while committing costs money that cannot
-be returned; a refused bid un-records its swipe so the lot comes back to the stack, and cannot
-"spring the card back" because five seconds earlier the card left. Dismissing the sheet, or
-cancelling the window, still leaves the lot swiped-interested and reachable from My Bids; do not
-silently un-swipe it.
+**The one guard that remains is idempotence.** `useLotActions` keeps a per-lot in-flight set and
+refuses a second press while the first is outstanding, and every bid carries a fresh
+`client_request_id`. Without that, a double tap on a slow connection is two bids.
+
+**The list's right button bids exactly `minimum_next_bid_minor` with no maximum.** It sends no
+`max_amount_minor` at all — the backend treats an absent maximum as "the bid is the maximum", so
+omission is how "no proxy" is expressed. Raising is offered on the outcome, at the moment being
+outbid makes its value obvious.
 
 **The sheet asks for one number: the most you'll pay.** It sends `amount_minor` =
 the server's `minimum_next_bid_minor`, and the user's typed number as `max_amount_minor`. Sending
@@ -73,14 +81,22 @@ their number as `amount_minor` would make their ceiling the visible price and ov
 The backend runs proxy bidding from that ceiling; the sheet says so out loud ("You'll pay only what
 it takes to win, up to X"), because a UI that hides it produces users who feel tricked when the
 price climbs on its own. Raising an existing maximum goes to `PUT /auto-bid` instead — maximums are
-raise-only, validated inline before the server has to refuse.
+raise-only, validated inline before the server has to refuse. **The sheet has one editable field
+and nothing else**: the +1/+2/+5 increment chips under the input were removed as noise.
 
 **`am_i_leading: false` on a *successful* bid is normal, not an error.** A rival's hidden maximum was
 higher and the backend counter-bid for them instantly. Say so plainly and offer to raise. Rendering
 it as a failure teaches people the app is broken when it is working correctly.
 
+**Every refusal now has nowhere to hide.** With no confirmation step, `BidOutcomeSheet` is the only
+thing that can explain one, and all four paths are real and handled: the 403 with `shortfall_minor`
+rendered exactly as the server gives it, the 409 for a lot that has stopped accepting bids, the 422
+carrying the new minimum, and the 429 with the wait derived from `Retry-After`.
+
 **Money is an integer number of minor units everywhere.** Never float arithmetic. The divide by 100
-happens once, at render, in `components/ui/Money.tsx` — the only place money becomes text.
+happens once, at render, in `components/ui/Money.tsx` — the only place money becomes text. Text that
+is not rendered as an element (an `aria-label`, say) goes through `formatMoney`, which is what
+`Money` itself calls; it never does its own arithmetic.
 
 **Token refresh is single-flight** (`lib/api/client.ts`). Parallel 401s must all await one refresh.
 Firing several replays a rotated refresh token, which the backend reads as theft and revokes the
@@ -96,10 +112,30 @@ response (`lib/format/clock.ts`); components read `useNow()`, never `Date.now()`
 that is both impure (the React Compiler lint enforces it) and a wrong close time on a device with a
 skewed clock. One shared ticker drives every countdown.
 
+**The final minute is an alarm, not red text.** `Countdown` switches to a filled `--danger` pill
+with `--on-fill` ink, a type step up and bold weight, plus a slow breath. **Four signals, only one
+of which is colour** — a bidder who cannot distinguish red must still see it. Under
+`prefers-reduced-motion` the breath stops and *everything else stays*: the `urgent` keyframe puts
+the full-strength state at both 0% and 100% precisely so the global reduce rule, which snaps every
+animation to its final frame, lands on the emphatic state rather than the dim middle of the cycle.
+Measured: with motion, opacity 0.93 mid-cycle; with reduced motion, opacity exactly 1 and the fill,
+weight and size unchanged.
+
+**The clock line reserves the alarm's height whether or not the clock is urgent** (`min-h-6` on the
+row's clock line). Crossing into the final minute must not reflow the row and push the buttons down
+— measured across a real crossing at 360×480: row height 167px at 1:28 and 167px at 0:59.
+
+**`plain` turns the alarm off, and auction-level clocks use it.** An auction's own close, an "opens
+in", and the anti-snipe extension notice are not a lot's bidding deadline; an alarm on them is
+crying wolf. On lot detail the alarm *replaces* the "live" `StatusPill` rather than nesting inside
+it, because an accent-bordered container around a danger fill reads as neither.
+
 **`status` is not authoritative for "can I bid".** It labels an *outcome*, so a lot reads `live`
 until the lifecycle worker decides how it ended, while any bid past `effective_ends_at` is already
 refused with a 409. Gate on the clock via `isLotOpen` (`lib/format/time.ts`). Trusting `status`
-puts a live "Place a bid" button on a dead lot.
+puts a live "Place a bid" button on a dead lot. The 409 branch is still reachable even with that
+guard — a lot withdrawn or cancelled out from under a page that still shows it live — which is why
+the copy says what is certain (no bid, no charge) rather than blaming the clock.
 
 **`bids.sequence` is gap-free per lot.** Track the highest seen; reconnect with the per-lot
 `after_sequences` map so each lot resumes from its own position. On `resync_too_far` you **must**
@@ -113,24 +149,14 @@ not a busy one. Replayed duplicates are dropped by sequence as a safety net; kee
 
 **Full-height layouts use `dvh` — never `vh`, and never a percentage height against `<html>`.**
 Both of those resolve against the *large* viewport, the one that assumes the mobile URL bar has
-collapsed. The card stack sets `touch-none` so the browser can claim no scroll gesture, which means
-the bar may never collapse: the small viewport is the permanent state, and `h-full` on `<html>` had
-the shell sizing itself to a viewport the user never has. That is what pushed the swipe buttons
-under the bottom nav. Any new full-height screen inherits the same trap, so `min-h-dvh` on `<body>`
-is the baseline and nothing above it re-introduces `h-full`.
+collapsed — a viewport the user may never actually have. `min-h-dvh` on `<body>` is the baseline and
+nothing above it re-introduces `h-full`. The card stack used to make this acute by setting
+`touch-none`, which stopped the bar ever collapsing; the stack is gone, but the rule is not, because
+any new full-height screen inherits the same trap.
 
-Two tokens in `app/globals.css` hold that layout together, and they move in pairs:
-
-- `--nav-h` — the bottom nav's height. `AppShell` reserves it as page padding and `CardStack`'s
-  action row is `fixed` at `calc(var(--nav-h) + env(safe-area-inset-bottom))`. Change the nav's real
-  height without this token and the row lands on top of it.
-- `--stack-actions-h` — how much of the card the floating row may cover. `LotCardFace` pads its
-  content by exactly this, so the overlap only ever falls on dead space. **The price must never sit
-  under a button.** Make the row taller and this grows with it, or the number disappears.
-
-The card area is `min-h-0 flex-1`: when height is short the *card* shrinks, never the buttons, which
-stay at 56/48/56 px against a 44 px minimum. Verify any change to either token on a scheduled
-auction (the "bidding opens in…" banner costs the most height) at ~360×480.
+`--nav-h` in `app/globals.css` is the bottom nav's height, reserved by `AppShell` as page padding.
+Change the nav's real height without this token and content lands under it. (`--stack-actions-h`
+lived beside it and is gone with the stack.)
 
 **A focus ring belongs on the element that carries the corner radius.** Our text fields are a
 rounded wrapper around a bare `input`: the wrapper owns the radius, the border and any adornment,
@@ -178,56 +204,14 @@ may see. `reserve_price_minor` is admin-only and must not be requested, stored o
 
 **Never compute `minimum_next_bid_minor` yourself.** It is price-banded and configurable per auction
 and per lot — server-owned. Read it from the lot, from the bid response, or from the 422 that tells
-you someone bid first.
+you someone bid first. It is now also *rendered*, on the Bid button, which makes this sharper rather
+than softer: the number on the button is the number that gets sent.
 
-## The four gestures, and the win
+## The win
 
-Left is pass and right is bid — both recorded through `PUT /swipe`, both recoverable from My bids.
-**Up is skip, and it is deliberately not remembered**: no request, nothing stored on the server, the
-card moves to the back and is back on the next **reload**. It survives moving around inside the app
-— to lot detail, to the profile and back — because losing your place every time you looked at
-something would be worse than remembering it; it does not survive a refresh, because a skip is "not
-now", not a list to manage later. That lifetime is `lib/browse/browseSession.ts`, which is memory
-only. Do not "improve" it by persisting it.
-
-**Down is undo, the inverse of up** — up sets a lot aside, down brings the last one back, which is
-also the direction a list scrolls back. Both vertical gestures need a longer, faster pull than
-left/right (150px or 700px/s, against 110/550) because they share an axis with page scrolling, and
-the card sets `touch-none` so the browser cannot claim the gesture first.
-
-**Undo covers all three gestures, newest first**, from one `history` list in `useLotStack` — mixing
-a pass, a skip and a bid must rewind in the order they actually happened. Undoing a pass or an
-interested swipe deletes the swipe server-side; **undoing a skip sends nothing**, because a skip was
-never anything but local: dropping it from the history stops the lot being sorted to the back, and
-it returns to the front on its own as the earliest lot still unresolved. With nothing to undo, the
-card bounces rather than silently absorbing the pull — a gesture that does nothing invisibly is one
-nobody discovers, and the hint says "Nothing to undo" instead of promising one. The Undo button
-stays: the gesture is an addition, never a replacement.
-
-**The drag hint is the only thing telling someone what a release will do, so it is built like it.**
-One label, centred on the card and leaning up to 44px toward the direction of travel — not pinned to
-the corner the card is heading for, which is exactly where it leaves the screen. It lives inside the
-card and cancels the card's own transform (a point at the centre of a rotating box doesn't move, so
-undoing `x` and `y` pins it, and a counter-rotation keeps the words level — measured at 0.00° while
-the card sits at ±9°).
-
-**Two states, one language for all four gestures**: *pending* is an outline in the gesture's colour,
-*armed* is that colour filled with a thicker border and a small pop, and armed means "release now and
-this commits" — `COMMIT_DISTANCE` sideways, `SKIP_DISTANCE` vertically. Colour alone is never the
-signal; the border weight and fill carry it too. Pass is danger, bid is accent, skip is muted, undo
-is `--undo`. The label always sits on an **opaque** background because it is read over user
-photography of unknown brightness.
-
-**The hint must agree with what the release actually does.** The commit check follows
-`dragDirectionLock`'s axis and the hint reads the same rule. The flick shortcut also requires the
-velocity to agree in sign with the offset: taking speed alone let a fast yank back to centre commit
-the *opposite* gesture, so a card that read "BID" could pass the lot.
-
-**Reduced motion drops the animation, not the information.** `prefers-reduced-motion` used to hide
-these labels entirely, which removed the only signal of what a gesture would do from the people most
-likely to need it. Both states still show; only the fade-in and the scale pop are dropped.
-
-Every gesture has three ways in: the drag, a button, and an arrow key (←, →, ↑, ↓).
+**There are no gestures.** Left/right/up/down, undo, skip, the drag hints, the two-state armed
+language, the arrow-key equivalents and the whole card surface they lived on are gone — see "One
+layout" below for what replaced them and why. Nothing in this app responds to a drag.
 
 **Winning is announced once, properly.** A win is a `/me/bids` row that has ended with the user
 still leading. Which wins have been celebrated lives in `localStorage` (`cw.wins_seen`) — it is
@@ -236,73 +220,80 @@ The modal is app-wide so it lands wherever the user is, fires live off the closi
 events only reach lots the current screen subscribes to), and always answers "what now": the lots
 won with prices, the balance, the payment reference and how to collect.
 
-## Three layouts, one lot set
+## One layout: the list
 
-Cards, list and gallery. The preference is **per device in `localStorage`** (`cw.browse_layout`),
-chosen once on first entry into an auction and changeable on `/profile` — the same treatment and the
-same reasoning as the theme, so do not add a user field or sync it.
+There were three ways to browse an auction — a card stack, a photo gallery and a list — chosen per
+device and remembered in `localStorage`, with the stack as the default and the stated identity of
+the product. **All of that is gone.** The first live stakeholder session found the app too complex;
+the direction is now fewest buttons, fewest options, fewest taps to place a bid. The list is the
+only layout, there is no preference to set, and `/profile` no longer has a browsing section.
 
-**All three render one set, and that set has one owner.** `useAuctionBrowse` is called *once*, by
-`AuctionBrowseScreen`, and handed to whichever layout is showing. It exposes `remaining` — the set,
-in lot-number order, for the list and the gallery — and `cards`, which is the same set re-ordered
-for the stack. If a layout ever computed its own membership, switching layout mid-browse would show
-a different auction, and there would be two filter models where there should be one.
+**Nothing is ever removed from the list because of something the user did.** Lots used to disappear
+as they were passed or saved, and the visible set was the server's unswiped list minus this
+session's decisions layered on top. Swiping is gone from the product and from the backend
+(`lot_swipes`, `PUT/DELETE /swipe`, `GET /me/swipes` and `my_swipe` no longer exist), so a lot
+leaves this list for exactly one reason: it ended and the server stopped returning it.
 
-**Every layout goes through the same mutation path.** One `PUT /swipe`, one cache writer, and
-`useLotActions` for what a decision *means* on screen. **In the list, a "Bid…" button is not a bid**
-— it records `interested` and opens the sheet, and money moves only on confirm there. The ellipsis
-is doing work: it promises that something opens.
+**Two buttons a row, and no pass.**
 
-That differs from the stack deliberately. The stack's swipe commits after a cancel window (see the
-rule above) because one lot at a time and a whole-viewport gesture is a materially harder thing to
-hit by accident than a button sitting beside other buttons in a view where rows move — the same
-reason the list holds a resolved row's space for 320ms. Both surfaces keep a confirmation step;
-only its shape differs. Which one applies is chosen at the call site, `decide(lot, direction,
-{ commit: true })`, so there is still exactly one decision path and no second copy to drift.
+| Position | Label | Behaviour |
+|---|---|---|
+| Left | **Enter Maximum** / **Raise Maximum** | opens the slide-up sheet with an editable amount |
+| Right | **Bid R1 200** | places that bid immediately — no sheet, no confirmation |
 
-**Undo is shared and ordered.** One history across all three layouts, newest first, so a pass in the
-list and a skip in the stack rewind in the order they happened. Undoing a decision also
-**invalidates the lots query**: dropping the entry is only half the job, because a lot swiped before
-the last fetch is not in the pages the server built, and without the refetch the undo would delete
-the swipe and change nothing on screen.
+The right button carries the real figure, `minimum_next_bid_minor`, rendered through `Money`. The
+left button's label reads off `my_auto_bid_max_minor`, which the backend now puts on `LotCardOut`
+for exactly this — one field instead of a per-row fetch. Note that a bid placed with no maximum
+still *sets* a maximum server-side, equal to the bid, so a row flips to "Raise Maximum" straight
+after a plain bid. That is faithful to the field and to what the user would want to do next.
 
-**The browse session is cleared when the session ends** (`endSession` → `clearBrowseSessions`). It
-is memory-only and would otherwise outlive a sign-out in the same tab: on a shared device the next
-person inherits the previous one's history, and an undo into an inherited entry sends
-`DELETE /swipe` for a lot they never touched.
+Both buttons are disabled together, on the clock (`isLotOpen`) and on the auction being live —
+never one without the other, because a bid sheet that can be opened on a dead lot only leads to a
+409 at the end of it.
 
-**"Open the stack at this tile" anchors to a lot *number*, never a lot.** The gallery hands over
-through `?at=<lot_number>` — in the URL so the back button returns to the grid — and the stack sorts
-by "is this lot number below the anchor" then by lot number. An anchor that pointed at the *element*
-would evaporate the moment its lot was resolved, which is the first thing the user does, and the
-stack would snap back to lot 1. As a threshold it also survives paging and puts an undone lot back
-in front. Lots before the anchor wrap to the end, so none becomes unreachable.
+**The lot number is top-right and large.** Testers could not find it when it was a muted line under
+the title, and it is how people refer to lots out loud and in a WhatsApp message — so it is the
+second thing you see after the photograph. It sits on the title's own line, in the space the title
+was already leaving, so the row does not grow: the title truncates instead.
 
-**The list holds a resolved row's space for 320ms, and that is a timer, not an animation.** A row
-vanishing under a finger drops the next row's Pass button into the same pixels. Under
-`prefers-reduced-motion` the collapse goes and **the hold stays** — dropping the animation must never
-drop the protection. The row is inert the instant it is actioned, and the list announces the action
-to a screen reader, which a disappearing row otherwise does not.
+**The list pages on scroll**, via a sentinel (`useLoadMoreOnScroll`) — the whole set is on screen at
+once, so paging cannot wait for the user to work down to the last few. No virtualisation: measured
+at 250 lots — 2,839 DOM nodes, median frame 13.3ms, one frame over 50ms — so a windowing dependency
+would be paid for by every auction to fix a problem no auction has.
 
-**The gallery restores its scroll by lot id and pixel offset, never by index.** The user goes to the
-stack to resolve lots, so the tile they left from is usually gone and every index after it has
-moved; on return it walks forward through the id order as it was to the first lot still present.
+**"Are you winning" is a join, not a field.** `LotCardOut` carries no `am_i_leading`, so the list
+joins `/me/bids` (`active_only=false`, three states: absent, leading, outbid). That endpoint caps at
+200 with no offset, so when the response is saturated an unmatched lot renders as **unknown**, never
+as "you never bid" — silently telling someone they have no bid on a lot they are losing is worse
+than admitting the app cannot tell.
 
-**"Are you winning" in the list is a join, not a field.** `LotCardOut` carries no `am_i_leading`, so
-the list joins `/me/bids` (`active_only=false`, three states: absent, leading, outbid). That endpoint
-caps at 200 with no offset, so when the response is saturated an unmatched lot renders as **unknown**,
-never as "you never bid" — silently telling someone they have no bid on a lot they are losing is
-worse than admitting the app cannot tell.
+**My bids is one list.** It had three tabs — Bidding, Interested, Passed — and the last two listed
+swipes. They went with swiping rather than leaving a single tab pretending to be a choice.
 
-**The scrolling layouts page on scroll.** The stack pulls a page when it is nearly out of cards,
-which for a list or a grid would hide everything past the first 20 until the user resolved their way
-down to six. Both use a sentinel (`useLoadMoreOnScroll`). No virtualisation: measured at 250 lots —
-2,839 DOM nodes, median frame 13.3ms, one frame over 50ms — so it is not needed, and a windowing
-dependency would be paid for by every auction to fix a problem no auction has yet.
+## Lot photography
 
-**`touch-none`, the fixed action row and `--stack-actions-h` are stack-only.** The list and the
-gallery scroll, so they must not adopt any of them; they rely on `AppShell`'s bottom padding, and the
-list's undo bar is `sticky top-0` rather than fixed above the nav.
+**On lot detail nothing is cropped.** The gallery letterboxes: `object-contain` against black, so a
+landscape photo from a phone shows its full width and a tall portrait shows its whole height, with
+the bands falling wherever the aspect ratio puts them. It used to be `object-cover` in a 4:3 box,
+which quietly ate the ends of every photo that was not 4:3 — on the one screen where somebody is
+examining the thing they are about to spend money on.
+
+**The list keeps its crop.** A ragged list is worse than a cropped thumbnail, and the row is a
+pointer to the lot rather than a look at it. Only the detail page letterboxes.
+
+**Tapping a photo opens it full screen, and pinch-zoom is the browser's, not ours.** The overlay is
+a scroll-snap track with `touch-action: pan-x pinch-zoom`, which tells the browser it may claim the
+two-finger gesture — so iOS Safari and Android Chrome do the zooming with their own momentum, bounds
+and double-tap. **No library, no gesture code, no dependency.** The one thing this depends on is the
+document permitting user scaling: `app/layout.tsx` sets `maximumScale: 5` and, critically, **never
+`userScalable: false`** — setting that would silently kill pinch-zoom everywhere, and it is the
+failure mode to look for first if zoom ever stops working. `pan-y` is deliberately absent from the
+track so a vertical drag cannot scroll the page behind the overlay.
+
+**A lot may carry up to 20 photos**, so the viewer pages and states the position as "3 / 20" rather
+than a row of dots nobody can count. The position is also announced to a screen reader through a
+live region, because a scroll-snap change is otherwise silent. Only the first image gets `priority`;
+the rest lazy-load, which matters more now that 20 is possible and image optimization is off.
 
 ## Anonymous browsing
 
@@ -321,19 +312,17 @@ the allowlist leaves a public page guarded, which is loud and harmless.
 applies here: no deposit, no blur, no nag, nothing hidden behind signing up. One "Get started" bar,
 exactly `--nav-h` tall so it sits where the bottom nav does and the layout maths is unchanged.
 
-**Absence, not disabled controls.** The list and the gallery take `actions?`; anonymous passes
-nothing and the rows render **no buttons at all**. A disabled control is an invitation to work out
-how to enable it.
+**Absence, not disabled controls.** `LotList` takes `actions?`; anonymous passes nothing and the
+rows render **no buttons at all**. A disabled control is an invitation to work out how to enable it.
+(This is now the *only* difference between the member and anonymous list, which is why one component
+serves both — there is no second layout to keep in step, as there was when the gallery existed.)
 
-**No card stack for anonymous.** The stack is a decision surface — drag, action row, undo — and with
-nothing to resolve it is a full-screen photo you cannot advance, with `touch-none` stopping it
-scrolling. Gallery is the default and list is the alternative; a stored preference of `stack` falls
-back **without being overwritten**, since it is still their preference for when they sign in.
-
-**`LotSummary` is the boundary, not a mode flag.** The public shapes carry no `my_swipe`, no
-`am_i_leading`, no `bid_sequence` — absent, not null — and the presentational components take the
-structural type both sides satisfy. A component that never receives a member field cannot render
-one. Exactly three places ask which mode they are in: the entries for `/`, the auction and the lot.
+**`LotSummary` is the boundary, not a mode flag.** The public shapes carry no `am_i_leading` and no
+`my_auto_bid_max_minor` — absent, not null — and the presentational components take the structural
+type both sides satisfy. Widen `LotSummary` only with fields that exist on *both* sides; the list
+reads `my_auto_bid_max_minor` through one narrow, commented cast at the single site that needs it,
+rather than widening the type and losing the guarantee. Exactly three places ask which mode they are
+in: the entries for `/`, the auction and the lot.
 
 **The public client is its own module** (`lib/api/publicClient.ts`), not a flag on `client.ts`.
 `generateMetadata` runs in Node, and the authenticated client touches the session store and the
@@ -358,8 +347,7 @@ are sitting on cached data with no reason to re-ask.
 origin, so neither the server nor the client knows whether a visitor is signed in until the refresh
 returns — which means one wrong first paint is unavoidable. The hint picks which: a device that has
 signed in before waits behind a skeleton, a device that has not gets the public content immediately.
-It grants nothing, and it is cleared in `endSession` alongside the browse state so a failed refresh
-drops it too.
+It grants nothing, and it is cleared in `endSession` so a failed refresh drops it too.
 
 ## Theming
 
@@ -373,54 +361,85 @@ indirection, one `[data-theme="light"]` block re-points the raw tokens and every
 `text-text` and `border-border` follows. Add new colours as a raw token plus an `@theme inline`
 mapping, never as a literal.
 
-**The accent is not a neutrals problem.** `#E8FF5A` is ~1.1:1 against white — invisible. So there
-are three accent tokens, and which one you reach for depends on how the colour is used:
+**The accent is the logo's gold, `#F6C000`** — sampled from the artwork, where the dominant cluster
+is `#F6BA00`/`#F6C000`/`#F6C600`. It replaced a lime `#E8FF5A`. The logo's black `#0A0A0A` and its
+white already matched the existing `--bg` and text tokens, and its red (~`#AE0000`) is close enough
+to `--danger` that nothing moved there.
+
+**The accent is not a neutrals problem, and gold has the lime's problem in milder form.** The lime
+was ~1.1:1 against white; gold is 1.69:1 — better, still far under the 3:1 a non-text boundary
+needs. So the same three tokens exist, and which one you reach for depends on how the colour is used:
 
 | Token | Use | Dark | Light |
 |---|---|---|---|
-| `--accent` | brand **fills** (buttons, selected tab, logo) | `#E8FF5A` | `#E8FF5A` — unchanged |
-| `--accent-text` | accent as **text**, and thin marks that must be seen (focus rings, live dot, toast bar, gallery dot) | `#E8FF5A` | `#5C6B00` — darkened same hue |
-| `--accent-edge` | border on a brand fill | `transparent` | `#5C6B00` |
-| `--undo` | the undo gesture's own hue | `#7DD3FC` | `#0A6A9E` |
-| `--on-fill` | ink on a filled swipe hint | `#0A0A0B` | `#FFFFFF` |
+| `--accent` | brand **fills** (buttons, selected tab, logo) | `#F6C000` | `#F6C000` — unchanged |
+| `--accent-ink` | the label on a gold fill | `#0A0A0B` | `#0A0A0B` — unchanged |
+| `--accent-text` | accent as **text**, and thin marks that must be seen (focus rings, live dot, toast bar) | `#F6C000` | `#806200` — darkened same hue |
+| `--accent-edge` | border on a brand fill | `transparent` | `#806200` |
+| `--on-fill` | ink on a filled **danger** mark — today the final-minute countdown | `#0A0A0B` | `#FFFFFF` |
 
-`--undo` is a hue of its own rather than a reuse of `--success`: green already means *winning* here,
-and a swipe hint is not a result. `--on-fill` exists because the relationship inverts between
-themes — every hint fill is a light colour on dark and a dark one on light — so one token per theme
-covers all four gestures. The lime is the exception and keeps `--accent-ink`, because it stays lime
-in both.
+**The gold stays gold in both themes**, exactly as the lime did — it is the brand colour and must
+not be darkened into something else in light mode. Only the *text* and *edge* variants diverge.
+`--accent-edge` is why the gold button still reads as a button on white: the fill alone is 1.69:1
+against a white card, so light gives it an edge rather than abandoning the brand colour. In dark it
+is transparent and nothing shifts. `--accent-ink` needs no per-theme value because it sits on the
+gold, which is the same in both — 11.74:1 either way.
 
-`--accent-edge` is why the lime button still reads as a button on white: the fill itself is only
-1.11:1 against a white card, which fails the 3:1 needed for a non-text boundary, so light gives it
-an edge instead of abandoning the brand colour. In dark it is transparent and nothing shifts.
-`--border-strong` marks control boundaries (inputs) as distinct from decorative card edges; in dark
-it equals `--border`, so the shipped look is untouched.
+**`#806200` is close to a ceiling, not a free choice.** It serves double duty as text and as the
+edge, and the edge needs 3:1 against the gold fill — it lands at 3.40. Anything lighter buys brand
+warmth by failing a non-text boundary.
 
-Measured ratios (WCAG AA: 4.5:1 body text, 3:1 large text and non-text boundaries):
+**`--undo` was deleted.** It was a hue of its own for the undo gesture; there is no undo gesture.
+**`--on-fill` was kept and repurposed**: it encodes something still true — that the ink on a filled
+mark inverts between themes — and the final-minute countdown needs exactly that. It is a live token
+with one consumer, not a leftover.
+
+**Green was left alone, and that was checked rather than assumed.** Every green in the app resolves
+to `--success`: the winning/outbid badge, the lot-detail outcome panel, the win modal, the toast,
+`StatusPill`, and `lotOutcome`'s success tone. The single arguable case is `AccountScreen`, which
+uses `text-success` for a *credit* ledger line — money in rather than a lot won. It stays green:
+"good thing happened to your balance" is the same family as winning, and a fourth semantic colour
+to separate them would be worse than the overlap. Nothing green was repainted gold, because winning
+and branding must not become the same colour.
+
+**Measured ratios** (WCAG AA: 4.5:1 body text, 3:1 large text and non-text boundaries). Every row
+below was recomputed for this change with a WCAG relative-luminance implementation, including the
+rows the accent does not touch:
 
 | Pairing | Dark | Light |
 |---|---|---|
-| text on bg / surface / raised | 18.2 / 16.9 / 15.3 | 16.4 / 18.0 / 15.5 |
-| muted text on bg / surface / raised | 7.1 / 6.6 / 6.0 | 5.8 / 6.4 / 5.4 |
-| accent-text on bg / surface / raised | 17.8 / 16.5 / 15.0 | 5.4 / 5.9 / 5.1 |
-| accent-text on the `accent/10` tint | 12.8 | 5.8 |
-| accent-ink on the accent fill (button label) | 17.8 | 17.8 |
-| danger on bg / surface / tint | 6.5 / 6.0 / 5.4 | 6.0 / 6.6 / 5.6 |
-| success on bg / surface / tint | 11.4 / 10.6 / 8.8 | 6.7 / 7.3 / 6.3 |
-| accent fill vs surface (button edge) | 16.5 | 1.11 -> `--accent-edge` at 5.9 |
-| pending hint text on its surface (pass / bid / skip / undo) | 6.0 / 16.5 / 6.6 / 11.0 | 6.6 / 5.9 / 6.4 / 5.9 |
-| armed hint ink on its fill (pass / bid / skip / undo) | 6.5 / 17.8 / 7.1 / 11.9 | 6.6 / 17.8 / 6.4 / 5.9 |
-| input border vs its fill | 1.16 (see below) | 3.12 |
+| text on bg / surface / raised | 18.16 / 16.89 / 15.26 | 16.43 / 18.04 / 15.45 |
+| muted text on bg / surface / raised | 7.08 / 6.59 / 5.95 | 5.79 / 6.36 / 5.44 |
+| accent-text on bg / surface / raised | 11.74 / 10.92 / 9.87 | 5.22 / 5.73 / 4.91 |
+| accent-text on the `accent/10` tint (over surface) | 9.04 | 5.43 |
+| accent-text on the `accent/10` tint (over raised) | 8.01 | **4.69** — tightest in the palette |
+| accent-ink on the accent fill (button label) | 11.74 | 11.74 |
+| accent-ink on the `accent/90` hover fill | 9.68 | 12.29 |
+| danger on bg / surface / tint | 6.47 / 6.01 / 5.35 | 5.98 / 6.57 / 5.58 |
+| success on bg / surface / tint | 11.36 / 10.56 / 8.82 | 6.01 / 6.60 / 5.69 |
+| success on the `success/5` tint (win modal) | 9.73 | 6.15 |
+| danger on the `danger/5` tint (statement) | 5.69 | 6.05 |
+| on-fill ink on the danger fill (final-minute clock) | 6.47 | 6.57 |
+| danger fill vs surface (that clock's own boundary) | 6.01 | 6.57 |
+| accent fill vs surface (button edge) | 10.92 | 1.69 -> `--accent-edge` at 3.40 vs the fill, 5.73 vs white |
+| input border (`--border-strong`) vs its fill | 1.16 (see below) | 3.12 |
+| card border vs surface (decorative) | 1.29 | 1.39 |
 
-Two were caught by measuring and fixed before shipping: light `success` at `#15803D` scored 4.38 on
-its own tint (below 4.5, now `#146B33`), and the light accent fill needed the edge token. **Card
-photos:** light surfaces are neutral white so lot photography still dominates — that is why dark was
-chosen originally and the light theme must not tint it away.
+**A correction to the previous table.** Light `success` was recorded as 6.7 / 7.3 / 6.3. The shipped
+token is `#146b33` and actually measures **6.01 / 6.60 / 5.69**; the recorded figures correspond to
+roughly `#146333`, a one-digit transposition. Nothing shipped failing — every value clears 4.5 — but
+the number in the file was wrong, which is a third instance of this file recording a ratio that had
+not been measured against the value actually in the CSS. The harness used here was cross-checked
+against every other row of the old table first, including the `#15803D`-on-its-own-tint 4.38 that
+this file records as a caught failure, and reproduced all of them exactly.
 
 **Known deviation:** the *decorative* card border is ~1.3:1 in both themes, and the dark input
 border is 1.16:1 — both pre-date theming and are unchanged here. Light inputs use `--border-strong`
 because they would otherwise be imperceptible; raising dark's `--border-strong` to ~`#6C6F78` would
 close the dark gap, and is a one-line change if wanted.
+
+**Card photos:** light surfaces are neutral white so lot photography still dominates — that is why
+dark was chosen originally and the light theme must not tint it away.
 
 **No flash of the wrong theme.** `next-themes` injects a script that sets `data-theme` before first
 paint — a dark-mode user must never see a white flash. It also handles the OS theme changing while
@@ -443,16 +462,16 @@ Each auction carries `deposit_amount_minor` — what must be on account before b
 auction*. `GET /me/account` returns the caller's own statement, paginated, and there is no route to
 anyone else's.
 
-**Browsing is deliberately ungated.** The auction list, the card stack, swiping in *both*
-directions, lot detail and bid history all work with no deposit and no credit. The gate is only on
-placing a bid. Do not add a gate, a blur or a nag anywhere else: someone has to be able to explore a
-whole auction and then decide it is worth putting money down. The deposit requirement is shown on
-the auction card as information, never as a barrier.
+**Browsing is deliberately ungated.** The auction list, the lot list, lot detail and bid history
+all work with no deposit and no credit. The gate is only on placing a bid. Do not add a gate, a blur
+or a nag anywhere else: someone has to be able to explore a whole auction and then decide it is
+worth putting money down. The deposit requirement is shown on the auction card as information,
+never as a barrier.
 
 **A published auction is viewable before it opens.** Scheduled auctions are enterable: someone can
-walk the lots and swipe, and swiping right still saves interest — it just cannot open the bid sheet,
-because bidding is not open. Say when it opens rather than showing a dead button. Only `draft` is
-hidden, and that is the backend's doing.
+walk the lots and read them; both row buttons are simply disabled, because bidding is not open.
+Say when it opens rather than showing a live-looking button. Only `draft` is hidden, and that is the
+backend's doing.
 
 **Eligibility is the server's decision.** Show the requirement, but never compute eligibility
 client-side as the source of truth — always handle the 403. It arrives typed
@@ -529,17 +548,20 @@ digits. Production runs on the default.
 
 ## Structure
 
-- `app/` — routes. `(app)/` is everything with app chrome, which is no longer the same as
-  everything private: `/`, `/auctions/[id]` and `/lots/[id]` are **canonical URLs that work signed
-  in or not**. The wall is `AuthGuard`, still in that group's layout, minus the allowlist in
+- `app/` — routes. `(app)/` is everything with app chrome, which is not the same as everything
+  private: `/`, `/auctions/[id]` and `/lots/[id]` are **canonical URLs that work signed in or not**.
+  The wall is `AuthGuard`, still in that group's layout, minus the allowlist in
   `lib/auth/publicPaths.ts`. `login/` and `welcome/` sit outside the group entirely.
 - `components/` — UI primitives (`ui/`) plus feature components grouped by surface.
 - `lib/api/` — typed client, endpoints, zod schemas, error classes, query keys, cache writers.
 - `lib/auth/` — session store, device id, login flow state.
 - `lib/realtime/` — socket client, event→cache reducer, connection/sequence store.
 - `lib/format/` — money, time, lot status. Pure functions; they take `now` rather than reading it.
-- `lib/hooks/` — shared hooks (stack paging, subscriptions, ticker, bid submission).
+- `lib/hooks/` — shared hooks (paging, subscriptions, ticker, bid submission, list actions).
 - `types/` — API types inferred from the zod schemas.
+
+`lib/browse/` and `lib/bid/` are gone — they held the layout preference, the browse-session history
+and the pending-bid store, none of which have a subject any more.
 
 Three files carry most of the risk and are worth reading before changing anything nearby:
 `lib/api/client.ts`, `components/bid/BidSheet.tsx`, `lib/realtime/socket.ts`.
@@ -568,13 +590,18 @@ per lot.
 ## Guardrails
 
 - **No new dependencies** without a reason that maps to the stack above. No component library —
-  build the primitive.
+  build the primitive. Pinch-zoom was done with `touch-action` and the browser, not a library.
 - `next-themes` is the one dependency added outside the original stack: it exists for the
   pre-paint script, OS-change handling, cross-tab sync and SSR agreement, all of which are easy to
-  hand-roll incorrectly.
+  hand-roll incorrectly. `framer-motion` is now the one whose justification has *shrunk* — see the
+  stack section.
 - **Never put the access token in storage**, and never read the refresh token from JS.
 - **Never compute `minimum_next_bid_minor`, or reveal a reserve amount.**
+- **Never re-apply a filter the server already owns.** `GET /auctions` and `GET /me/bids` exclude
+  anything whose auction ended more than two weeks ago. A second copy of that rule in the client is
+  a second thing to keep in step, and it will drift.
 - **Don't create git commits.** Stage the work and let the developer review it.
+- **Delete rather than deprecate.** Nothing is live.
 - Verify against the running backend, don't reason about it. Every bug worth finding here was found
   by driving the real thing (see NOTES.md).
 
@@ -582,10 +609,6 @@ per lot.
 
 Accepted, with reasons. Please don't re-raise them.
 
-- **`SwipedList` fetches the auctions list to resolve currency.** Lot cards carry `auction_id` but no
-  `currency_code`, and `/me/swipes` spans auctions by design. The extra fetch is intentional: ZAR is
-  expected to remain the only currency, so this costs one cached request rather than a schema
-  change, and money still renders from the auction's own currency instead of a hardcoded symbol.
 - **`/me/bids` caps at 200 with no offset**, so the list's "Winning / Outbid" badge cannot be
   resolved for a bidder with more than 200 bids. Those rows say so explicitly rather than guessing,
   and the list shows a one-line notice. Fixing it properly needs paging on that endpoint; asserting
@@ -594,18 +617,23 @@ Accepted, with reasons. Please don't re-raise them.
   per-device — the same person wants dark on a phone at night and light on a laptop in daylight — so
   syncing it across devices would be wrong behaviour, not a missing feature. Do not "fix" this by
   adding a user field.
-- **Lot metadata is real for public lots and generic for private ones.** This gap is half closed.
-  `generateMetadata` fetches `/public/lots/{id}` server-side — no token is involved, which is
-  exactly why the server can render it — so a shared link previews the photo, the title and the
-  price. A private or missing lot 404s there and falls back to site metadata; **that is deliberate,
-  not a shortfall**, because a title naming a private lot would confirm it exists. Private lots
-  still cannot have real previews, and still for the original reason: the access token is
-  memory-only and the server cannot see a session.
+- **Lot metadata is real for public lots and generic for private ones.** `generateMetadata` fetches
+  `/public/lots/{id}` server-side — no token is involved, which is exactly why the server can render
+  it — so a shared link previews the photo, the title and the price. A private or missing lot 404s
+  there and falls back to site metadata; **that is deliberate, not a shortfall**, because a title
+  naming a private lot would confirm it exists.
 - **Bid history refetches rather than splicing** a new bid into page one. Simpler and always
   correct; one small request per bid, on the lot detail screen only.
 - **Image optimization is off** (`next.config.ts`) until the media host is settled — lot photos come
   from whatever host the backend serves, and a `remotePatterns` allowlist breaks silently on a new
-  one.
+  one. This costs more on lot detail now that images are letterboxed and openable full screen, and
+  it is the reason a lot with 20 photos is heavier than it needs to be.
+- **A plain bid sets a maximum equal to itself**, so a row reads "Raise Maximum" immediately after a
+  no-maximum bid. That is the backend's model faithfully reflected, not a labelling bug.
+- **Eight exported symbols have no callers** — `BidStatus`, `PublicLotImage`, `UserRole`,
+  `UserStatus`, `clockOffsetMs`, `isClockSynced`, `formatMoneyDelta`, `normalisePhone`. All eight
+  predate the simplification (verified against `HEAD`), and the four in `types/api.ts` are arguably
+  deliberate contract surface. Left alone rather than swept up inside an unrelated change.
 
 `NOTES.md` holds the longer record: judgement calls, backend requests, and the end-to-end
 verification runs including the bugs they caught.

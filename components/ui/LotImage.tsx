@@ -51,8 +51,8 @@ export function LotImage({
       sizes={sizes}
       priority={priority}
       onError={() => setFailed(true)}
-      // Without this the browser's native image drag starts instead, and it
-      // swallows the pointer stream any swipe gesture depends on.
+      // Without this the browser's native image drag starts instead, which
+      // swallows the pointer stream the gallery's scroll-snap depends on.
       draggable={false}
       className={cn("object-cover select-none", className)}
     />

@@ -78,11 +78,11 @@ function PublicAuctionCard({ auction }: { auction: PublicAuction }) {
           <h2 className="truncate text-base font-semibold">{auction.name}</h2>
           {auction.status === "live" ? (
             <StatusPill tone="live" pulse>
-              <Countdown endsAt={auction.ends_at} />
+              <Countdown endsAt={auction.ends_at} plain />
             </StatusPill>
           ) : auction.status === "scheduled" ? (
             <StatusPill>
-              <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
+              <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" plain />
             </StatusPill>
           ) : (
             <StatusPill>Ended</StatusPill>

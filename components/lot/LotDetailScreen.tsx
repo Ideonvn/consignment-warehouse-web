@@ -9,7 +9,7 @@ import { queryKeys } from "@/lib/api/queryKeys";
 import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
 import { useNow } from "@/lib/hooks/useTicker";
-import { isLotOpen } from "@/lib/format/time";
+import { formatRemaining, isLotOpen } from "@/lib/format/time";
 import { lotOutcome } from "@/lib/format/lotStatus";
 import { BidHistory } from "@/components/lot/BidHistory";
 import { LotGallery } from "@/components/lot/LotGallery";
@@ -91,6 +91,9 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
 
   const hasBids = lot.bid_count > 0 && lot.current_bid_minor !== null;
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
+  // Final minute: the alarm replaces the pill instead of sitting inside it —
+  // an accent-bordered container around a danger fill reads as neither.
+  const urgent = open && now !== null && formatRemaining(lot.effective_ends_at, now).urgent;
   // A lot that hasn't opened yet is not a closed lot, and must never read as one.
   const notYetOpen = lot.status === "scheduled";
   const outcome = notYetOpen
@@ -120,14 +123,16 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
       <PhoneColumn className="pb-8">
         <div className="flex items-center justify-between gap-2 pt-4">
           <StatusPill>Lot {lot.lot_number}</StatusPill>
-          {open ? (
+          {open && urgent ? (
+            <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
+          ) : open ? (
             <StatusPill tone="live" pulse>
-              <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
+              <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" plain />
             </StatusPill>
           ) : notYetOpen ? (
             <StatusPill>
               {auction ? (
-                <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
+                <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" plain />
               ) : (
                 "Opens soon"
               )}

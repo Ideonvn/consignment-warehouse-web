@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { clearBrowseSessions } from "@/lib/browse/browseSession";
 import type { User } from "@/types/api";
 
 export type SessionStatus = "loading" | "authenticated" | "anonymous";
@@ -65,19 +64,10 @@ export const useSession = create<SessionState>((set) => ({
   signIn: (accessToken, user) =>
     set({ accessToken, user, status: user ? "authenticated" : "loading" }),
   endSession: () => {
-    /*
-     * Browse state goes with the session, wherever the session ends — the
-     * profile's sign-out, a failed refresh, or bootstrap finding no cookie.
-     *
-     * It is memory-only, so it would otherwise outlive a sign-out in the same
-     * tab and the next person on a shared device would inherit the previous
-     * one's skips and undo history. Undoing into an inherited entry would send
-     * `DELETE /swipe` for a lot this user never touched.
-     */
-    clearBrowseSessions();
-    // Alongside the browse state, and for the same reason: this runs on a failed
-    // refresh too, not just the sign-out button, so the hint dies with the
-    // session rather than outliving it and choosing a skeleton forever.
+    // This runs on a failed refresh too, not just the sign-out button, so the
+    // hint dies with the session rather than outliving it and choosing a
+    // skeleton forever. There is no browse state left to clear alongside it:
+    // the per-auction history this used to guard no longer exists.
     clearSessionHint();
     set({ accessToken: null, user: null, status: "anonymous" });
   },

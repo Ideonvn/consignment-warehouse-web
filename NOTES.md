@@ -615,3 +615,94 @@ Verification created several auctions through the admin API — "Verification Ru
 Closes", "Verification Anti-snipe", "Verification Sold", "Verification Opening", "Verification
 Scheduled" and "Journey Finale" — plus bids on the seeded Spring Collectables lots. They are
 harmless but visible in the app; `make seed` on a fresh database clears them.
+
+---
+
+# Simplification round (list-only, no swiping, gold palette)
+
+Everything above this line is the build record of the **card-stack** product. Several entries in it
+are now history rather than description — specifically "Skip is local by design", the swipe-hint
+section, "Three browsing layouts", "One-tap bidding on the stack", and the gesture halves of
+"Countdowns, gestures and the win". They are kept because they record *why* those things were built,
+which is the useful part when someone asks whether reversing them was reasonable. `CLAUDE.md` is the
+description of the app as it stands.
+
+## What this round changed
+
+The card stack, the photo gallery, the layout preference and first-run chooser, all four gestures,
+undo, skip, the browse-session store, the swiped lists, and the five-second pending-bid cancel
+window were deleted. The list is the only layout, with two buttons a row and no pass. The accent
+moved from lime to the logo's gold. Lot detail letterboxes and opens full screen with pinch-zoom.
+
+## Judgement calls this round
+
+- **The cancel window's removal is a real loss, recorded as one.** There is still no bid retraction
+  API, so a mis-tap is now irreversible where it previously was not. The window went because
+  stakeholders found the delay confusing. What replaced it as protection: the amount is on the
+  button before the press, and a per-lot in-flight guard plus a fresh `client_request_id` stop a
+  double tap becoming two bids. That guard is not optional — it is the only thing left.
+- **`skip` was deleted with the stack, not with the swipes.** It only ever re-ordered the stack's
+  card list; once that ordering went, skip pushed history entries nothing read.
+- **`useLotActions` was rewritten rather than deleted.** One path to `POST /bids`, one to the sheet,
+  plus the in-flight set. `useAuctionBrowse` was kept too, much thinner, as the member counterpart
+  to `usePublicAuction` — the symmetry is what lets one `LotList` serve both modes.
+- **`my_auto_bid_max_minor` is read through one narrow cast in `LotList`**, not by widening
+  `LotSummary`. `LotSummary` is the shape both member and public cards satisfy; widening it would
+  destroy the guarantee that a public row cannot render a member affordance.
+- **`--on-fill` was kept and repurposed**; `--undo` was deleted. `--on-fill` encodes that ink on a
+  filled mark inverts between themes, which the new final-minute countdown needs.
+- **framer-motion survives on a weaker brief.** Four files use it (`Sheet`, `Toast`,
+  `ConnectionBanner`, `WinCelebration`) — none of them a gesture. Flagged in `CLAUDE.md` as a
+  removal candidate rather than removed here, since that is a separate change with its own risk.
+- **The 320ms list-row hold was removed.** It guarded against a row vanishing under a finger and
+  dropping the next row's Pass button into the same pixels. Rows no longer vanish and there is no
+  Pass, so the hazard was deleted before the guard was.
+
+## Verification, driven against the running backend
+
+`make dev-all` (API on `0.0.0.0` so a phone can reach it) plus `make seed`; shapes read from
+`/openapi.json` rather than assumed. Bidder `+27820000002`, rival `+27820000003`, no-deposit bidder
+`+27820000034`, admin `+27820000001`.
+
+| Check | Result |
+|---|---|
+| Two buttons a row, amount from the server | Pass. `Bid R 99`, `Bid R 1 200`, `Bid R 38 000` — each equal to that lot's `minimum_next_bid_minor`. |
+| One immediate `POST /bids`, no confirmation | **Pass.** Exactly one request, body `{"amount_minor":9900,"client_request_id":…}` — **no `max_amount_minor` at all**, which is how "no maximum" is expressed. No dialog in the DOM 120ms after the press. |
+| Sheet sends the ceiling separately | **Pass.** Typed R2 000 on a R1 200 lot sent `{"amount_minor":120000,"max_amount_minor":200000}`; the lot went to R1 200, not R2 000. |
+| Left button flips to "Raise Maximum" | Pass, from the cache writer with no refetch. Also flips after a *plain* bid, because the backend sets the maximum to the bid — faithful, and noted as a known gap. |
+| Increment chips gone | Pass. The sheet's only controls are Confirm and Not now. |
+| 403 deposit shortfall | Pass. R0 bidder into a R5 000 auction: "You have R 0 on account / This auction needs R 5 000 / Add R 5 000", with the payment reference. |
+| 429 from the real limiter | **Pass.** 60 bids accepted, the 61st returned `429` with `Retry-After: 59`; the UI then rendered "too many bids on this lot. Try again in 34s." |
+| 422 someone bid first | **Pass.** A real rival bid lot 15 to R8 500 from a second session; the stale row's press returned the server's new minimum — "The minimum is now R 8 750." |
+| 409 lot closed | **Pass.** An admin withdrew lot 16 while the page still showed it live. Copy was corrected during this run: it claimed the clock ran out, which is not the only cause of a 409. |
+| Clock, not `status`, gates the buttons | Pass. Both buttons disabled together on a closed lot and on a scheduled auction. |
+| Final-minute alarm | **Pass, measured across a real crossing.** At 1:28: transparent, weight 400, 12px, no animation. At 0:59: `--danger` fill `rgb(255,90,90)`, `--on-fill` ink, weight 700, 14px, `urgent` running. |
+| No reflow at the crossing | **Pass.** Clock line 24px and row 167px at *both* 1:28 and 0:59 — `min-h-6` reserves the alarm's height up front. |
+| Reduced motion keeps the urgency | **Pass.** With the reduce block applied, `animation-duration` collapses to 1e-05s and the element settles at **opacity 1, transform none** — the full-strength frame, not the dim middle — with fill, ink, weight and size unchanged. |
+| Letterbox on lot detail | **Pass.** `object-fit: contain` on every slide; a 900×1200 portrait renders whole with black bands in a 390×293 frame. A 4:3 photo fills the 4:3 frame exactly, which is correct, not a missing band. |
+| Full-screen viewer | Pass. Opens on the tapped photo (3/6), `role="dialog" aria-modal="true"`, `touch-action: pan-x pinch-zoom`, page scroll locked and restored, Escape closes. |
+| 360×480, scheduled auction | Pass, signed in and anonymous. Rows and both buttons fit; nothing under the nav. |
+| Both themes | Pass. Light `--accent-edge` `#806200` visibly holds the gold button's boundary against white. Green still means winning, distinct from the gold. |
+| Server-side two-week exclusion | Pass. `harvest-clearance-long-past` (ended > 2 weeks ago) is absent from `/auctions`, and the client adds no filter of its own. |
+| Console | Clean. Two pre-existing Next.js LCP hints about list thumbnails; no errors. |
+
+**Not verified: pinch-zoom on physical hardware.** I have no access to a phone, so the one check that
+was specifically called out as needing real hardware is the one I could not run. What *is* verified
+is everything the implementation controls: `touch-action: pan-x pinch-zoom` is applied to the
+full-screen track, the viewport permits scaling (`maximum-scale=5`, no `user-scalable=no`), and no
+JS touches the gesture — the browser is being asked to do it. To confirm in thirty seconds, open
+`http://<LAN-IP>:3000/lots/<id>` on a phone on the same network, tap a photo, and pinch.
+
+### Environment notes for the next person
+
+- `make dev-all` binds uvicorn to `127.0.0.1`. For a phone (or for a browser on the LAN IP) run the
+  API with `--host 0.0.0.0` and point `S3_PUBLIC_URL_BASE` at the LAN IP too, or lot photos resolve
+  to `localhost:9100` and never load off-device.
+- **Serve the web app from the same host as the API.** With the page on `localhost:3000` and the API
+  on `192.168.1.184:8000`, the refresh cookie is cross-site and is not sent, so every reload lands
+  as an anonymous visitor. Use the LAN IP for both.
+
+### Test data left behind
+
+This run withdrew Spring Collectables lot 16, rescheduled two auctions, and placed ~65 bids on lot
+1. **`make seed` was re-run afterwards**, so the database is back to the documented dataset.

@@ -17,26 +17,28 @@
   --border: #2a2a2e;
   --text: #f5f5f6;
   --text-muted: #9a9aa2;
-  --accent: #e8ff5a;
+  /* The logo's gold, sampled from the artwork rather than estimated: the
+     dominant cluster is #F6BA00/#F6C000/#F6C600. It stays gold in BOTH themes —
+     it is the brand colour, and darkening it in light would make it a different
+     colour rather than the same one adapted. Only the text and edge variants
+     diverge. (This replaced a lime #E8FF5A.) */
+  --accent: #f6c000;
   --accent-ink: #0a0a0b;
   /* Accent-coloured *text*, and any small accent mark that has to be SEEN
      against a surface. On dark that is the brand colour itself; on light the
-     lime is ~1.1:1 against white, so light re-points this to a darkened
-     reading of the same hue. */
-  --accent-text: #e8ff5a;
-  /* Edge on a brand-filled surface. Dark needs none — the lime already sits at
-     16.5:1 against the card — so it stays transparent and nothing shifts. */
+     gold is 1.69:1 against white, so light re-points this to a darkened reading
+     of the same hue. */
+  --accent-text: #f6c000;
+  /* Edge on a brand-filled surface. Dark needs none — the gold already sits at
+     10.9:1 against the card — so it stays transparent and nothing shifts. */
   --accent-edge: transparent;
   /* Control boundaries (inputs), as opposed to decorative card edges. */
   --border-strong: #2a2a2e;
   --danger: #ff5a5a;
   --success: #4ade80;
-  /* Undo's own hue. Green was the obvious reuse and is wrong here: in this app
-     green already means *winning*, and a swipe hint is not a result. */
-  --undo: #7dd3fc;
-  /* Ink for text sitting on a filled swipe hint. Every fill is a light colour on
-     dark, so one near-black reading covers all of them — except the lime, which
-     keeps `--accent-ink` because it stays lime in both themes. */
+  /* Ink for text sitting on a filled DANGER mark — today the final-minute
+     countdown. The relationship inverts between themes (a light red fill on
+     dark, a dark red one on light), so it is a token rather than a literal. */
   --on-fill: #0a0a0b;
 }
 
@@ -44,10 +46,10 @@
  * Light theme — daylight readability, not a redesign.
  *
  * Card surfaces stay neutral white so lot photos still dominate, which is why
- * dark was chosen in the first place. The brand lime survives as a FILL
- * (near-black ink on it reads at 17.8:1); as text or a thin mark it cannot, so
- * those use `--accent-text`. Every value here was measured, not eyeballed —
- * the ratios are recorded in CLAUDE.md.
+ * dark was chosen in the first place. The brand gold survives as a FILL
+ * (near-black ink on it reads at 11.74:1); as text or a thin mark it cannot —
+ * 1.69:1 on white — so those use `--accent-text`. Every value here was
+ * measured, not eyeballed; the ratios are recorded in CLAUDE.md.
  */
 [data-theme="light"] {
   /* Native controls, scrollbars and autofill follow this, not the palette. */
@@ -59,14 +61,16 @@
   --border-strong: #83868f;
   --text: #16161a;
   --text-muted: #5c5f6b;
-  --accent: #e8ff5a;
+  --accent: #f6c000;
   --accent-ink: #0a0a0b;
-  --accent-text: #5c6b00;
-  --accent-edge: #5c6b00;
+  /* Darkened same hue. #806200 is close to the ceiling for this value: the edge
+     role needs 3:1 against the gold fill and lands at 3.40, so anything lighter
+     buys brand warmth by failing a non-text boundary. */
+  --accent-text: #806200;
+  --accent-edge: #806200;
   --danger: #b42318;
   --success: #146b33;
-  /* Light inverts the relationship: the fills are dark, so the ink is white. */
-  --undo: #0a6a9e;
+  /* Light inverts the relationship: the fill is dark, so the ink is white. */
   --on-fill: #ffffff;
 }
 
@@ -84,7 +88,6 @@
   --color-accent-text: var(--accent-text);
   --color-danger: var(--danger);
   --color-success: var(--success);
-  --color-undo: var(--undo);
   --color-on-fill: var(--on-fill);
 
   --font-sans:
@@ -95,6 +98,7 @@
 
   --animate-pulse-accent: pulse-accent 900ms ease-out;
   --animate-live: live 2s ease-in-out infinite;
+  --animate-urgent: urgent 1s ease-in-out infinite;
 }
 
 @keyframes pulse-accent {
@@ -110,14 +114,21 @@
   }
 }
 
-/* The cancel window draining. Decoration only: `PendingBidStrip` hides this bar
-   under `prefers-reduced-motion` and the countdown number carries the meaning. */
-@keyframes pending-bid-drain {
-  from {
-    width: 100%;
+/* The final minute breathing.
+ *
+ * The FULL-strength pill is both endpoints and the dim moment is the middle, so
+ * the reduce-motion rule below — which snaps every animation to its final
+ * frame — lands on the emphatic state rather than the faded one. Dropping the
+ * animation must never drop the information. */
+@keyframes urgent {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
-  to {
-    width: 0%;
+  50% {
+    opacity: 0.72;
+    transform: scale(0.97);
   }
 }
 
@@ -133,14 +144,11 @@
 
 :root {
   color-scheme: dark;
-  /* The stack is a phone-width column even on desktop. */
+  /* Phone-width column even on desktop. */
   --app-width: 28rem;
   /* Bottom nav height, excluding the safe-area inset. Anything anchored above
      the nav measures from this rather than repeating the number. */
   --nav-h: 3.5rem;
-  /* Height reserved at the bottom of a stack card for the floating action row,
-     so the row never lands on the title, price or bid count. */
-  --stack-actions-h: 5.5rem;
 }
 
 html,

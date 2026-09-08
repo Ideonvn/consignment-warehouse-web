@@ -1,12 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { usePublicAuction } from "@/lib/hooks/usePublicAuction";
-import { useBrowseLayoutPreference } from "@/lib/browse/layoutPreference";
 import { wasSeen } from "@/lib/public/seen";
 import { ApiError } from "@/lib/api/errors";
-import { GalleryLayout } from "@/components/lot/GalleryLayout";
 import { LotList } from "@/components/lot/LotList";
 import { Countdown } from "@/components/ui/Countdown";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -17,18 +14,12 @@ import { GoneState } from "@/components/public/GoneState";
 /**
  * One auction, read-only.
  *
- * **Gallery and list only, defaulting to gallery.** The card stack is a decision
- * surface — drag, action row, undo, the exit animations — and stripping the
- * decisions out of it leaves a full-screen photo you cannot advance, with
- * `touch-none` stopping it scrolling. It would be the worst of the three photo
- * viewers. A stored preference of `stack` therefore falls back here **without
- * being overwritten**: it is still their preference for when they sign in.
+ * The same list a member sees, minus the buttons: `LotList` takes `actions?` and
+ * anonymous passes nothing, so the rows render **no controls at all** rather than
+ * disabled ones. A disabled control is an invitation to work out how to enable it.
  */
 export function PublicAuctionScreen({ auctionId }: { auctionId: string }) {
-  const router = useRouter();
   const browse = usePublicAuction(auctionId);
-  const preference = useBrowseLayoutPreference();
-  const layout = preference === "list" ? "list" : "gallery";
 
   if (browse.error) {
     const status = browse.error instanceof ApiError ? browse.error.status : null;
@@ -65,11 +56,11 @@ export function PublicAuctionScreen({ auctionId }: { auctionId: string }) {
             <h1 className="truncate text-sm font-medium">{auction.name}</h1>
             {auction.status === "live" ? (
               <StatusPill tone="live" pulse>
-                <Countdown endsAt={auction.ends_at} />
+                <Countdown endsAt={auction.ends_at} plain />
               </StatusPill>
             ) : auction.status === "scheduled" ? (
               <StatusPill>
-                <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
+                <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" plain />
               </StatusPill>
             ) : (
               <StatusPill>Ended</StatusPill>
@@ -79,30 +70,15 @@ export function PublicAuctionScreen({ auctionId }: { auctionId: string }) {
       </div>
 
       {auction ? (
-        layout === "list" ? (
-          <LotList
-            lots={browse.lots}
-            currency={auction.currency_code}
-            biddingOpen={false}
-            isPending={browse.isPending}
-            isFetchingMore={browse.isFetchingMore}
-            hasMore={browse.hasMore}
-            loadMore={browse.loadMore}
-          />
-        ) : (
-          <GalleryLayout
-            auctionId={auctionId}
-            lots={browse.lots}
-            currency={auction.currency_code}
-            isPending={browse.isPending}
-            isFetchingMore={browse.isFetchingMore}
-            hasMore={browse.hasMore}
-            loadMore={browse.loadMore}
-            // A tile leads to the lot's own page — the canonical, shareable URL —
-            // rather than into a stack this visitor cannot use.
-            onOpenLot={(lot) => router.push(`/lots/${lot.id}`)}
-          />
-        )
+        <LotList
+          lots={browse.lots}
+          currency={auction.currency_code}
+          biddingOpen={false}
+          isPending={browse.isPending}
+          isFetchingMore={browse.isFetchingMore}
+          hasMore={browse.hasMore}
+          loadMore={browse.loadMore}
+        />
       ) : (
         <div className="mx-auto w-full max-w-(--app-width) px-4">
           <Skeleton className="h-[60dvh] w-full rounded-card" />

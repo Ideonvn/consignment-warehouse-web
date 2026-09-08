@@ -62,7 +62,7 @@ export function AuctionList() {
     <PhoneColumn className="pb-8">
       <ScreenHeader
         title={firstName ? `Hi, ${firstName}` : "Auctions"}
-        subtitle="Swipe through the lots. Right to bid, left to pass."
+        subtitle="Browse the lots and place a bid."
       />
 
       {isPending ? (
@@ -138,16 +138,16 @@ function AuctionCard({
             </span>
             <span aria-hidden>·</span>
             {isScheduled ? (
-              <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" />
+              <Countdown endsAt={auction.starts_at} prefix="Opens in" endedLabel="Opening…" plain />
             ) : isLive ? (
-              <Countdown endsAt={auction.ends_at} prefix="Closes in" endedLabel="Closing…" />
+              <Countdown endsAt={auction.ends_at} prefix="Closes in" endedLabel="Closing…" plain />
             ) : (
               "Closed"
             )}
           </span>
           {enterable ? (
             <span className="font-semibold text-accent-text">
-              {isLive ? "Enter stack →" : isScheduled ? "Preview lots →" : "View lots →"}
+              {isLive ? "Browse lots →" : isScheduled ? "Preview lots →" : "View lots →"}
             </span>
           ) : null}
         </div>

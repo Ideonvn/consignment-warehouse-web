@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Consignment Warehouse",
     short_name: "Warehouse",
-    description: "Swipe, bid and win — live consignment auctions.",
+    description: "Bid and win — live consignment auctions.",
     start_url: "/",
     display: "standalone",
     background_color: "#0A0A0B",

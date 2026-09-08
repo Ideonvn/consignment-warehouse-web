@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 /**
  * Pulls the next page in when the end of the content comes into view.
  *
- * A scrolling layout has to page on scroll: the stack's "nearly out of cards"
- * trigger would leave everything past page one unreachable here.
+ * The list shows the whole set at once, so paging has to follow the scroll: on
+ * a large auction everything past the first page would otherwise be unreachable.
  */
 export function useLoadMoreOnScroll(hasMore: boolean, loadMore: () => void) {
   const sentinel = useRef<HTMLDivElement>(null);

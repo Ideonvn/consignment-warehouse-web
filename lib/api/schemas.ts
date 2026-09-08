@@ -98,8 +98,6 @@ export const lotStatusSchema = z.enum([
   "cancelled",
 ]);
 
-export const swipeDirectionSchema = z.enum(["pass", "interested"]);
-
 export const lotCardSchema = z.object({
   id: z.string(),
   auction_id: z.string(),
@@ -115,7 +113,12 @@ export const lotCardSchema = z.object({
   extension_count: z.number(),
   reserve_met: z.boolean(),
   primary_image_url: z.string().nullable(),
-  my_swipe: swipeDirectionSchema.nullable(),
+  /**
+   * The caller's own proxy ceiling on this lot, or null. On the *card* shape,
+   * not just the detail one, because the list's left button reads "Enter
+   * Maximum" or "Raise Maximum" from it — one field instead of a per-row fetch.
+   */
+  my_auto_bid_max_minor: z.number().nullable(),
 });
 
 export const lotCardListSchema = z.array(lotCardSchema);
@@ -132,8 +135,8 @@ export const lotImageSchema = z.object({
 export const lotDetailSchema = lotCardSchema.extend({
   description: z.string().nullable(),
   scheduled_ends_at: z.string(),
+  /** Up to 20 per lot. `LotGallery` pages between them. */
   images: z.array(lotImageSchema),
-  my_auto_bid_max_minor: z.number().nullable(),
   am_i_leading: z.boolean(),
 });
 
@@ -196,14 +199,6 @@ export const myBidSchema = z.object({
 });
 
 export const myBidListSchema = z.array(myBidSchema);
-
-/* -------------------------------------------------------------- swipes --- */
-
-export const swipeSchema = z.object({
-  lot_id: z.string(),
-  direction: swipeDirectionSchema,
-  updated_at: z.string(),
-});
 
 /* -------------------------------------------------------------- account --- */
 

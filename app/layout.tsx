@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "Consignment Warehouse",
     template: "%s · Consignment Warehouse",
   },
-  description: "Swipe, bid and win — live consignment auctions.",
+  description: "Bid and win — live consignment auctions.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Warehouse", statusBarStyle: "black-translucent" },
 };
@@ -38,9 +38,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   // `suppressHydrationWarning` on <html> is required: the pre-paint script sets
   // `data-theme` on it before React hydrates.
   // No `h-full` on <html>: percentage heights resolve against the *large*
-  // viewport, which on mobile assumes the URL bar has collapsed. The stack sets
-  // `touch-none` on cards so it may never collapse, making the short viewport
-  // the permanent state — `dvh` measures what is actually visible.
+  // viewport, which on mobile assumes the URL bar has collapsed — a viewport the
+  // user may never actually have. `dvh` measures what is visible right now.
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-dvh bg-bg text-text">

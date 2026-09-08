@@ -56,10 +56,9 @@ export type PublicAuctionBrowse = {
 /**
  * One public auction and its lots, with prices kept fresh by polling.
  *
- * Deliberately not shaped like `AuctionBrowse`: there is no resolved set, no
- * skip order and no undo history, because an anonymous visitor resolves
- * nothing. What the two share is the lot *shape*, which is why the gallery and
- * the list render either without being told which they are showing.
+ * Deliberately not shaped like `AuctionBrowse`: this one polls for prices,
+ * because there is no anonymous socket. What the two share is the lot *shape*,
+ * which is why `LotList` renders either without being told which it has.
  */
 export function usePublicAuction(auctionId: string): PublicAuctionBrowse {
   const auctionQuery = useQuery({

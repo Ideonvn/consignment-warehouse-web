@@ -31,9 +31,9 @@ type SubmitInput = {
   /** The visible bid — always the server's minimum, never their ceiling. */
   amountMinor: number;
   /**
-   * The user's ceiling, or null for a bid with no headroom — a one-tap swipe bids
-   * exactly the server's minimum. The backend treats an absent maximum as "the
-   * bid is the maximum", so omitting it is how "no proxy" is expressed.
+   * The user's ceiling, or null for a bid with no headroom — the list's Bid
+   * button sends exactly the server's minimum. The backend treats an absent
+   * maximum as "the bid is the maximum", so omitting it expresses "no proxy".
    */
   maxAmountMinor: number | null;
   /** Reused across retries of the same intent so a double tap can't bid twice. */
