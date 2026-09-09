@@ -63,6 +63,7 @@ export function AuctionList() {
       <ScreenHeader
         title={firstName ? `Hi, ${firstName}` : "Auctions"}
         subtitle="Browse the lots and place a bid."
+        action={<SearchLink />}
       />
 
       {isPending ? (
@@ -87,6 +88,29 @@ export function AuctionList() {
         </ul>
       )}
     </PhoneColumn>
+  );
+}
+
+/**
+ * Search is **global** — it crosses every auction — so it belongs on the screen
+ * that owns the whole catalogue rather than inside one auction.
+ *
+ * It is deliberately **not a fourth nav tab**: round 1's direction was fewer
+ * options, and a tab is an option on every screen forever. One icon on the one
+ * header that is about "all of it" costs nothing anywhere else.
+ */
+function SearchLink() {
+  return (
+    <Link
+      href="/search"
+      aria-label="Search lots"
+      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-border bg-surface-raised text-text-muted hover:text-text"
+    >
+      <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+        <circle cx="9" cy="9" r="5.25" />
+        <path d="M12.9 12.9L17 17" strokeLinecap="round" />
+      </svg>
+    </Link>
   );
 }
 

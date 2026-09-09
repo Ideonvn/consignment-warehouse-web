@@ -1,10 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { getLot } from "@/lib/api/endpoints";
+import { serverNow } from "@/lib/format/clock";
 import { patchLot, patchMyBid } from "@/lib/api/cache";
 import { queryKeys } from "@/lib/api/queryKeys";
-import { hasSequenceGap, isStaleSequence, useRealtimeStore } from "@/lib/realtime/store";
+import { hasSequenceGap, isOwnBid, isStaleSequence, useRealtimeStore } from "@/lib/realtime/store";
 import { realtime } from "@/lib/realtime/socket";
-import type { LotDetail, ServerMessage } from "@/types/api";
+import type { LotCard, LotDetail, ServerMessage } from "@/types/api";
 
 export type EventEffects = {
   /** The user was leading this lot and no longer is. */
@@ -20,6 +21,25 @@ export function refetchLots(queryClient: QueryClient, lotIds: string[]): void {
   }
   void queryClient.invalidateQueries({ queryKey: ["lots"] });
   void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
+}
+
+/**
+ * The close time we currently hold for a lot, from whichever cache entry has it.
+ * Read before a patch so the size of a move can be stated, not just its fact.
+ */
+function closeTimeInCache(queryClient: QueryClient, lotId: string): number | null {
+  const detail = queryClient.getQueryData<LotDetail>(queryKeys.lot(lotId));
+  if (detail) return Date.parse(detail.effective_ends_at);
+
+  for (const [, data] of queryClient.getQueriesData({ queryKey: ["lots"] })) {
+    const pages = (data as { pages?: { data: LotCard[] }[] } | undefined)?.pages;
+    if (!pages) continue;
+    for (const page of pages) {
+      const lot = page.data.find((entry) => entry.id === lotId);
+      if (lot) return Date.parse(lot.effective_ends_at);
+    }
+  }
+  return null;
 }
 
 /**
@@ -46,6 +66,19 @@ export function applyServerMessage(
       store.noteSequence(message.lot_id, message.sequence);
       store.pulse(message.lot_id);
 
+      // Honest FOMO: a real event, in the card it belongs to, saying nothing
+      // about **who**. The payload carries a handle and we deliberately do not
+      // use it. The echo of a bid this client just placed is not somebody else
+      // bidding, so it raises nothing.
+      const at = serverNow();
+      if (!isOwnBid(message.lot_id, message.sequence, at)) {
+        store.notice(message.lot_id, {
+          kind: "bid",
+          at,
+          amountMinor: message.amount_minor,
+        });
+      }
+
       const cached = queryClient.getQueryData<LotDetail>(queryKeys.lot(message.lot_id));
 
       patchLot(queryClient, message.lot_id, {
@@ -53,8 +86,16 @@ export function applyServerMessage(
         bid_count: message.bid_count,
         bid_sequence: message.sequence,
       });
-      patchMyBid(queryClient, message.lot_id, { current_bid_minor: message.amount_minor });
+      const mine = patchMyBid(queryClient, message.lot_id, {
+        current_bid_minor: message.amount_minor,
+      });
       void queryClient.invalidateQueries({ queryKey: queryKeys.bids(message.lot_id) });
+
+      // Whether this displaced the user is the server's to say — a rival's
+      // maximum is invisible here — so any lot we hold a `/me/bids` row for is
+      // re-asked. Without it the list keeps rendering "WINNING" next to an
+      // alert saying somebody else just bid, which is a lie about their money.
+      if (mine) void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
 
       // The bid event carries no `minimum_next_bid_minor`, and only the server
       // knows whether this displaced the user — a rival's maximum is invisible
@@ -74,19 +115,22 @@ export function applyServerMessage(
           })
           .catch(() => undefined);
 
-        if (cached.am_i_leading || cached.my_auto_bid_max_minor !== null) {
-          void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
-        }
       }
       return;
     }
 
     case "lot_extended": {
+      // Read the close time we currently hold *before* patching, so the card can
+      // say by how much rather than only that something moved.
+      const previous = closeTimeInCache(queryClient, message.lot_id);
+      const addedMs = previous === null ? null : Date.parse(message.effective_ends_at) - previous;
+
       patchLot(queryClient, message.lot_id, {
         effective_ends_at: message.effective_ends_at,
         extension_count: message.extension_count,
       });
       patchMyBid(queryClient, message.lot_id, { effective_ends_at: message.effective_ends_at });
+      store.notice(message.lot_id, { kind: "extended", at: serverNow(), addedMs });
       effects.onExtended(message.lot_id, message.effective_ends_at);
       return;
     }
@@ -94,7 +138,11 @@ export function applyServerMessage(
     case "lot_rescheduled": {
       // An admin moved the auction's clock. Unlike an anti-snipe extension this
       // can pull the close time *earlier*, so the new value is applied as-is
-      // rather than treated as a later bound.
+      // rather than treated as a later bound — and the card says "changed",
+      // never "extended".
+      const before = closeTimeInCache(queryClient, message.lot_id);
+      const deltaMs = before === null ? null : Date.parse(message.effective_ends_at) - before;
+
       patchLot(queryClient, message.lot_id, {
         scheduled_ends_at: message.scheduled_ends_at,
         effective_ends_at: message.effective_ends_at,
@@ -103,6 +151,7 @@ export function applyServerMessage(
       patchMyBid(queryClient, message.lot_id, {
         effective_ends_at: message.effective_ends_at,
       });
+      store.notice(message.lot_id, { kind: "rescheduled", at: serverNow(), deltaMs });
       return;
     }
 

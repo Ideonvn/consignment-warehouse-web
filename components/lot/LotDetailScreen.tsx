@@ -93,7 +93,7 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
   // Final minute: the alarm replaces the pill instead of sitting inside it —
   // an accent-bordered container around a danger fill reads as neither.
-  const urgent = open && now !== null && formatRemaining(lot.effective_ends_at, now).urgent;
+  const urgent = open && now !== null && formatRemaining(lot.effective_ends_at, now).alarm;
   // A lot that hasn't opened yet is not a closed lot, and must never read as one.
   const notYetOpen = lot.status === "scheduled";
   const outcome = notYetOpen
@@ -124,7 +124,7 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
         <div className="flex items-center justify-between gap-2 pt-4">
           <StatusPill>Lot {lot.lot_number}</StatusPill>
           {open && urgent ? (
-            <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
+            <Countdown endsAt={lot.effective_ends_at} />
           ) : open ? (
             <StatusPill tone="live" pulse>
               <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" plain />

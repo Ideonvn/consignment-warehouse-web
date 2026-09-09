@@ -8,6 +8,7 @@ import {
   detailSchema,
   lotCardListSchema,
   lotDetailSchema,
+  lotSearchResultListSchema,
   myBidListSchema,
   tokenPairSchema,
   userSchema,
@@ -21,6 +22,7 @@ import type {
   BidResult,
   LotCard,
   LotDetail,
+  LotSearchResult,
   MyBid,
   NotificationChannel,
   TokenPair,
@@ -132,6 +134,27 @@ export function listLots(
     schema: lotCardListSchema,
     query: params,
   });
+}
+
+/**
+ * Every lot this caller can see, across every auction.
+ *
+ * **The two-week window that hides old auctions from `GET /auctions` does not
+ * apply here** — search exists to answer "what did that go for". The server
+ * owns that exemption; nothing in this client re-applies the window, and
+ * nothing here may assert a bid state joined from `/me/bids`, which *is*
+ * windowed. See "Lot search" in CLAUDE.md.
+ *
+ * `cursor` is **opaque**: it carries the compound sort key and a pinned
+ * instant. Pass back `X-Next-Cursor` verbatim; never parse, decode or build one
+ * — the server answers a malformed cursor with a 422.
+ */
+export function searchLots(params: {
+  q: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<ApiResult<LotSearchResult[]>> {
+  return apiRequest("/lots/search", { schema: lotSearchResultListSchema, query: params });
 }
 
 export function getLot(lotId: string): Promise<LotDetail> {

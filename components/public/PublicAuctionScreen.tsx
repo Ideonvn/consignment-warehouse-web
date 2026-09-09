@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePublicAuction } from "@/lib/hooks/usePublicAuction";
 import { wasSeen } from "@/lib/public/seen";
+import { formatCloseDay } from "@/lib/format/time";
 import { ApiError } from "@/lib/api/errors";
 import { LotList } from "@/components/lot/LotList";
 import { Countdown } from "@/components/ui/Countdown";
@@ -68,6 +69,18 @@ export function PublicAuctionScreen({ auctionId }: { auctionId: string }) {
           </div>
         )}
       </div>
+
+      {/* The same quiet summary a member sees. The escalating header is not here:
+          it needs the auction's anti-snipe settings to explain itself, and the
+          public shape carries none of them. */}
+      {auction ? (
+        <p className="mx-auto w-full max-w-(--app-width) px-4 pb-1 text-xs text-text-muted">
+          {auction.lot_count} {auction.lot_count === 1 ? "lot" : "lots"} ·{" "}
+          {auction.status === "live" || auction.status === "scheduled"
+            ? `Closes ${formatCloseDay(auction.ends_at)}`
+            : "Closed"}
+        </p>
+      ) : null}
 
       {auction ? (
         <LotList

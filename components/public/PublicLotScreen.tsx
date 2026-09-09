@@ -72,7 +72,7 @@ export function PublicLotScreen({ lotId }: { lotId: string }) {
   }
 
   const open = isLotOpen(lot.status, lot.effective_ends_at, now);
-  const urgent = open && now !== null && formatRemaining(lot.effective_ends_at, now).urgent;
+  const urgent = open && now !== null && formatRemaining(lot.effective_ends_at, now).alarm;
   const notYetOpen = lot.status === "scheduled";
   const hasBids = lot.current_bid_minor !== null && lot.bid_count > 0;
   const outcome = notYetOpen
@@ -87,7 +87,7 @@ export function PublicLotScreen({ lotId }: { lotId: string }) {
         <div className="flex items-center justify-between gap-2 pt-4">
           <StatusPill>Lot {lot.lot_number}</StatusPill>
           {open && urgent ? (
-            <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" />
+            <Countdown endsAt={lot.effective_ends_at} />
           ) : open ? (
             <StatusPill tone="live" pulse>
               <Countdown endsAt={lot.effective_ends_at} prefix="Closes in" plain />

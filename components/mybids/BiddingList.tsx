@@ -206,7 +206,7 @@ function BidRow({
               </span>
             ) : null}
             {row.is_open ? (
-              <Countdown endsAt={row.effective_ends_at} prefix="Closes in" />
+              <Countdown endsAt={row.effective_ends_at} />
             ) : (
               <span>Closed</span>
             )}

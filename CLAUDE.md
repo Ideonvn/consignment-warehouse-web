@@ -22,6 +22,31 @@ Everything below is real money in someone's hands. A user who is startled by wha
 committed them to does not come back — and since the cancel window is gone, the tap *is* the
 commitment, which raises the stakes on saying clearly what a button will do.
 
+## Urgency is a mode, not a layout
+
+A second stakeholder session asked for two things that read as opposites: **clearer, less technical
+wording**, and **much more urgency as a lot approaches its close** — the second being roughly the
+inverse of round 1's "fewest buttons, cleanest screen". They are both satisfied, and this is the
+sentence that explains how:
+
+> **Urgency is a function of the clock, not a permanent feature of the layout.**
+
+At six days out a row is exactly as quiet as round 1 asked for. Inside the final hour it escalates.
+Same component, same elements, driven by `effective_ends_at`, which the client already holds and
+already ticks against `useNow()`. **Nothing here needed new data, and nothing was added to the
+layout to make it louder.** Round 2 did not overrule round 1; it is layered on the clock.
+
+**Permanent** (round 1's, and unchanged): two buttons a row and no pass; a bid placed the moment the
+button is pressed, with no confirmation; one layout; nothing removed from the list by something the
+user did; no watchlist, no presence count, no condition label, no glow on the bid button.
+
+**Conditional on the clock:** the countdown's format and emphasis, the sticky close bar on the
+auction header, and the alarm's fill. All five clock tiers, and the bar, are off until the time
+remaining brings them on.
+
+**Wording carries the rest**, and cost nothing: constant button labels, state moved out of labels
+and into data lines, an icon beside every colour, uppercase on the two buttons that commit money.
+
 ## Stack, and why each piece is here
 
 Locked decisions. Don't swap them out without a reason that survives the one below.
@@ -66,6 +91,16 @@ immediacy. Two things still stand between a tap and a wrong bid, and both must s
 carries the actual amount so the commitment is legible before the press, and it is a single-purpose
 button in a row, not a whole-viewport gesture.
 
+**A refused bid releases its own-bid claim.** `useBidSubmit` claims the lot before the request so
+the socket echo of the caller's own bid is not misattributed — the echo usually beats the response
+back — and `applyBidResult` clears the claim by naming the exact sequences that were ours. A refusal
+produces no result, so it used to clear nothing and the claim stood for the full
+`OWN_BID_WINDOW_MS`, silently swallowing a rival's genuine bid on that lot. **The claim is a
+prediction that a bid is about to appear on that channel, and a refusal is evidence the prediction
+is false**; holding a known-false prediction is strictly worse than dropping it. Only a 4xx is that
+evidence: a 5xx, a dropped connection or an unparseable body all leave open that the bid committed
+and its echo is still coming, so those keep the claim.
+
 **The one guard that remains is idempotence.** `useLotActions` keeps a per-lot in-flight set and
 refuses a second press while the first is outstanding, and every bid carries a fresh
 `client_request_id`. Without that, a double tap on a slow connection is two bids.
@@ -98,6 +133,29 @@ happens once, at render, in `components/ui/Money.tsx` — the only place money b
 is not rendered as an element (an `aria-label`, say) goes through `formatMoney`, which is what
 `Money` itself calls; it never does its own arithmetic.
 
+**One retry rule, in `app/providers.tsx`, and nowhere else.** A 4xx is the server having considered
+the request and declined it: retrying asks the same question and expects a different answer. That
+one sentence covers the 404 on a private auction, the 403 for a deposit not yet paid, the 409 on a
+lot that has closed, and the 422 and 429 on search. `SessionExpiredError` is checked first because
+it does not necessarily carry a status of its own.
+
+**Put a status in that rule; do not put a predicate in a hook.** React Query's query-level `retry`
+*overrides* the default wholesale rather than composing with it, so a local predicate is a second
+copy of this reasoning — and this rule was independently rediscovered twice, in
+`usePublicAuction` (404) and `useLotSearch` (all 4xx), before it was moved to the default and both
+were deleted. `retryUnlessGone` is gone.
+
+Two things the comment there says out loud rather than leaving implicit. **A 429 cannot be helped by
+retrying here, measured rather than assumed:** every limiter in this API goes through one helper
+that sets the key's TTL only on the first write — a fixed window — so the window is 60s while the
+backoff is ~1s then ~2s, and both retries are refused by construction. Checked against the running
+API: `Retry-After` read 60s, and still 60s after two retry-shaped requests, so a retry here is
+futile rather than *actively* harmful. It would be actively harmful against a sliding window, which
+is the reason not to relax the rule for 429 later. **And 408 is the one 4xx that plausibly
+self-heals**, ruled out rather than overlooked: this API never emits one — FastAPI has no path that
+returns it and Caddy answers a timed-out upstream with 504, a 5xx, which this rule retries. A
+blanket "no 4xx" is right *for this API*, not everywhere.
+
 **Token refresh is single-flight** (`lib/api/client.ts`). Parallel 401s must all await one refresh.
 Firing several replays a rotated refresh token, which the backend reads as theft and revokes the
 entire family — the user is logged out permanently, not transiently. A failed refresh is never
@@ -112,23 +170,78 @@ response (`lib/format/clock.ts`); components read `useNow()`, never `Date.now()`
 that is both impure (the React Compiler lint enforces it) and a wrong close time on a device with a
 skewed clock. One shared ticker drives every countdown.
 
-**The final minute is an alarm, not red text.** `Countdown` switches to a filled `--danger` pill
-with `--on-fill` ink, a type step up and bold weight, plus a slow breath. **Four signals, only one
-of which is colour** — a bidder who cannot distinguish red must still see it. Under
-`prefers-reduced-motion` the breath stops and *everything else stays*: the `urgent` keyframe puts
-the full-strength state at both 0% and 100% precisely so the global reduce rule, which snaps every
-animation to its final frame, lands on the emphatic state rather than the dim middle of the cycle.
-Measured: with motion, opacity 0.93 mid-cycle; with reduced motion, opacity exactly 1 and the fill,
-weight and size unchanged.
+**Urgency is a function of the clock, not a permanent feature of the layout.** This is the whole
+reconciliation between round 1 (fewest buttons, cleanest screen) and round 2 (much more urgency).
+Nothing was added to the row to make it louder: at six days out it is exactly the quiet row round 1
+asked for, and the *same* elements escalate as `effective_ends_at` approaches. Anything permanent
+would have overruled round 1; anything conditional on the clock satisfies both. Nothing new is
+fetched to do it.
+
+**The clock has five tiers** (`ClockTier` in `lib/format/time.ts`), and only the last two are loud:
+
+| Remaining | Renders | Emphasis |
+|---|---|---|
+| > 48h | `Closes in 6d 0h` | muted, weight 400 — as it always was |
+| 24–48h | `Closes tomorrow at 18:00` | muted, weight 400 |
+| 1–24h | `4h 32m left` + a clock mark | `--text`, weight 500 |
+| 60s–1h | `09:42 left` | filled `--danger` pill, `--on-fill` ink, type step up, bold |
+| < 60s | `00:42 left` | the same pill, now breathing |
+
+The thresholds are chosen for what a bidder can *act* on. Past 48 hours a duration is all anyone
+needs. Inside two days a wall-clock time is something to plan around — and "tomorrow" is a calendar
+fact, not a 24-hour window, so at 23:00 a close 47 hours out correctly reads `Closes Friday at
+22:00` rather than lying about tomorrow. Inside a day the clock is today's business. Inside an hour
+a bidder either watches or loses the lot, and that is where the alarm now begins.
+
+**The final-hour treatment is the final-minute treatment, extended downward rather than reinvented.**
+Same `--danger` fill, same `--on-fill` ink, same type step, same weight. **Four signals, only one of
+which is colour** — a bidder who cannot distinguish red must still see it. The final *minute* adds a
+fifth, the breath, and nothing else: the pill is already at full strength an hour out.
+
+Under `prefers-reduced-motion` the breath stops and *everything else stays*: the `urgent` keyframe
+puts the full-strength state at both 0% and 100% precisely so the global reduce rule, which snaps
+every animation to its final frame, lands on the emphatic state rather than the dim middle of the
+cycle. Measured against the running backend at 360×480, computed styles on the row's clock:
+
+| State | opacity | transform | fill | ink | size | weight |
+|---|---|---|---|---|---|---|
+| < 60s, motion (dark) | 0.743 mid-cycle | `scale(0.972)` | `#FF5A5A` | `#0A0A0B` | 14px | 700 |
+| < 60s, reduced (dark) | **1** | none | `#FF5A5A` | `#0A0A0B` | 14px | 700 |
+| < 60s, motion (light) | breathing | breathing | `#B42318` | `#FFFFFF` | 14px | 700 |
+| 60s–1h, either (dark) | 1 | none | `#FF5A5A` | `#0A0A0B` | 14px | 700 |
+| 1–24h (dark) | 1 | none | none | `--text` `#F5F5F6` | 12px | 500 |
+| > 48h (dark) | 1 | none | none | `--text-muted` `#9A9AA2` | 12px | 400 |
+
+Dropping the animation drops no information: the reduced-motion row differs from the motion row in
+opacity and transform only.
 
 **The clock line reserves the alarm's height whether or not the clock is urgent** (`min-h-6` on the
-row's clock line). Crossing into the final minute must not reflow the row and push the buttons down
-— measured across a real crossing at 360×480: row height 167px at 1:28 and 167px at 0:59.
+row's clock line), and the bid-state line below it has its own `min-h-4`. Crossing *any* threshold
+must not reflow the row and push the buttons down. Measured at 360×480 by driving each real
+crossing on the live ticker — no reload, no refetch — with the row height read either side:
 
-**`plain` turns the alarm off, and auction-level clocks use it.** An auction's own close, an "opens
-in", and the anti-snipe extension notice are not a lot's bidding deadline; an alarm on them is
-crying wolf. On lot detail the alarm *replaces* the "live" `StatusPill` rather than nesting inside
-it, because an accent-bordered container around a danger fill reads as neither.
+| Crossing | before | after |
+|---|---|---|
+| 48h (`Closes in 2d 0h` → `Closes Friday at 19:52`) | 181px | 181px |
+| 24h (`Closes tomorrow at 19:52` → `23h 59m left`) | 181px | 181px |
+| 1h (`1h 00m left` → `59:56 left`) | 181px | 181px |
+| 60s (`01:02 left` → `00:56 left`) | 181px | 181px |
+
+Minutes are zero-padded across the whole sub-hour range (`09:42`, `00:42`) so the pill's width never
+changes as it counts down. That is a deliberate departure from the old `9:42`/`0:42`: a fixed width
+is what makes the last hour reflow-free.
+
+**`plain` turns the escalation off entirely, and auction-level clocks use it.** An auction's own
+close, an "opens in", and the anti-snipe extension notice are not a lot's bidding deadline; an alarm
+on them is crying wolf — and so is a wall-clock format that implies one. A `plain` clock renders
+exactly what it always did: the bare duration, with the caller's own `prefix`. On lot detail the
+alarm *replaces* the "live" `StatusPill` rather than nesting inside it, because an accent-bordered
+container around a danger fill reads as neither — and that swap now happens at the final hour rather
+than the final minute.
+
+**The one deliberate exception is the auction's sticky close bar** (`AuctionCloseBar`), which is not
+`plain`. It is derived from a *lot's* `effective_ends_at`, so it is a bidding deadline; see "The
+sticky close bar" below.
 
 **`status` is not authoritative for "can I bid".** It labels an *outcome*, so a lot reads `live`
 until the lifecycle worker decides how it ended, while any bid past `effective_ends_at` is already
@@ -238,23 +351,44 @@ leaves this list for exactly one reason: it ended and the server stopped returni
 
 | Position | Label | Behaviour |
 |---|---|---|
-| Left | **Enter Maximum** / **Raise Maximum** | opens the slide-up sheet with an editable amount |
-| Right | **Bid R1 200** | places that bid immediately — no sheet, no confirmation |
+| Left | **AUTO BID** / *Set your maximum* | opens the slide-up sheet with an editable amount |
+| Right | **BID R1 200** | places that bid immediately — no sheet, no confirmation |
 
-The right button carries the real figure, `minimum_next_bid_minor`, rendered through `Money`. The
-left button's label reads off `my_auto_bid_max_minor`, which the backend now puts on `LotCardOut`
-for exactly this — one field instead of a per-row fetch. Note that a bid placed with no maximum
-still *sets* a maximum server-side, equal to the bid, so a row flips to "Raise Maximum" straight
-after a plain bid. That is faithful to the field and to what the user would want to do next.
+The right button carries the real figure, `minimum_next_bid_minor`, rendered through `Money`.
+
+**The left button's label is constant — on every row, in every state.** It used to read **"Enter
+Maximum"** or **"Raise Maximum"**, switching on `my_auto_bid_max_minor`. Stakeholders found that
+technical and ambiguous: neither wording says what pressing the button *does*. Worse, because a
+plain bid sets a maximum equal to itself server-side, a row flipped to "Raise Maximum" the instant
+someone bid — the label was reporting server state, which is not a label's job.
+
+So the state moved to a data line under the bid status, where it belongs:
+
+    Your auto bid: R2 500
+
+State as data, not state as a verb. `my_auto_bid_max_minor` is still needed and still earns its
+place on `LotCardOut` — it just drives a line rather than a label. **The line is absent when there
+is no maximum**, not "no auto bid set", which would be noise on the majority of rows.
 
 Both buttons are disabled together, on the clock (`isLotOpen`) and on the auction being live —
 never one without the other, because a bid sheet that can be opened on a dead lot only leads to a
 409 at the end of it.
 
-**The lot number is top-right and large.** Testers could not find it when it was a muted line under
-the title, and it is how people refer to lots out loud and in a WhatsApp message — so it is the
-second thing you see after the photograph. It sits on the title's own line, in the space the title
-was already leaving, so the row does not grow: the title truncates instead.
+**The lot number is a gold pill, top-right, and it says `LOT 1` — not `1`.** Testers could not find
+it when it was a muted line under the title, and it is what people quote out loud and in a WhatsApp
+message — "I'm asking about lot 1" — so it is the second thing you see after the photograph. **The
+word is the entire point of the label**: a bare number in a gold pill is decoration, `LOT 1` is
+something a person reads back down a phone line. It shipped briefly without the word, with the word
+only in an `sr-only` span; that was the label losing its reason to exist. (The `sr-only` span went
+with the change — with the word visible it would have a screen reader say "Lot LOT 1".)
+
+`--accent` fill with `--accent-ink` (11.74:1, identical in both themes) and `--accent-edge`, which
+is what keeps it reading as a mark rather than a smudge on a white card. It sits on the title's own
+line, in the space the title was already leaving, so the row does not grow: the title truncates
+instead. **Measured for the widest realistic case** — `LOT 148` on the seed's longest title (249
+characters) at 360×480: pill 72.7px (against 54.2px for `LOT 1`), title truncated from 148px to
+129px, **row height 181px, unchanged**. The pill costs no height at three digits. The same word is
+on the sticky close bar's pill, for the same reason.
 
 **The list pages on scroll**, via a sentinel (`useLoadMoreOnScroll`) — the whole set is on screen at
 once, so paging cannot wait for the user to work down to the last few. No virtualisation: measured
@@ -267,8 +401,225 @@ joins `/me/bids` (`active_only=false`, three states: absent, leading, outbid). T
 as "you never bid" — silently telling someone they have no bid on a lot they are losing is worse
 than admitting the app cannot tell.
 
+**All four bid states carry an icon and a word.** Colour is never the only signal — the same rule
+the countdown follows, for the same reason:
+
+| State | Renders | Tone |
+|---|---|---|
+| `leading` | ✓ mark + **WINNING** | `--success` |
+| `outbid` | ! mark + **OUTBID** | `--danger` |
+| `none` | dashed mark + **NOT BIDDING** | muted |
+| `unknown` | dashed mark + **BID STATUS UNKNOWN** | muted |
+
+`unknown` is **not** a tidier `none` and must not be collapsed into one. It exists because the app
+genuinely cannot tell past the 200-row cap, and the list keeps its one-line notice saying so. The
+line is `min-h-4` so a state changing under a bidder never moves the buttons.
+
+**A closed row shows the lot's outcome instead, and no bid state at all.** On a lot that has closed,
+what the caller was doing is not the interesting fact — what happened to the lot is. The row used to
+carry two lines saying nearly the same nothing, `Bidding closed` over `NOT BIDDING`; now the clock
+slot carries `lotOutcome`'s pill (`Sold` / `You won` / `Unsold` / `No bids` / `Reserve not met` /
+`Withdrawn` / `Cancelled`) and the bid-state line stands down. `amILeading` comes from a `/me/bids`
+row we actually hold, so `You won` is positive evidence and nothing is ever *inferred* from a row we
+may simply not have — the same rule search follows, and the reason both screens pass `bidStatus` and
+`outcome` explicitly rather than letting the row guess.
+
+That pill is 26px against the clock line's `min-h-6`, so a closed row measures **183px** where an
+open one measures 181px. The 2px lands only on a row that has already closed, whose buttons are
+already disabled; raising the reservation to absorb it would grow every open row instead.
+
+**A bid event and a lot extension are announced inside the card, never between cards.** Both come
+off the existing socket fan-out — no polling, no new endpoint — and land in `useRealtimeStore` as a
+per-lot `LotNotice` that the row renders for six seconds. An alert about lot 2 floating in the gap
+between lot 2 and lot 3 belongs to neither of them.
+
+- **"Another bidder just bid R1 000"**, on a `bid` event, only on a row where the caller is
+  `leading` or `outbid`. It is honest FOMO because it is a real event, and it says **nothing about
+  who**: the payload carries `bidder_handle` and it is deliberately unused.
+- **"Bid received — lot 2 extended by 5 min"**, on `lot_extended`. The figure is the *measured*
+  jump — the close time held in cache is read before the patch overwrites it — not the auction's
+  configured extension, because a bid at 3:26 remaining moves the clock by less than the full
+  window. If no cached close time was available to measure against, the sentence stops at
+  "extended" rather than inventing a figure.
+- **"Closing time changed — lot 2 now closes 8 min earlier"**, on `lot_rescheduled`, which is a
+  different event and gets different words. `lot_extended` is anti-snipe and only ever moves later;
+  a reschedule is an admin moving the auction's `ends_at` and cascades in **either** direction.
+  Calling a reschedule an extension is a lie to the user.
+
+**A bidder's own bid is never announced back to them as somebody else's.** The socket echo of a bid
+routinely arrives *before* its own HTTP response — verified against the running backend, where the
+first build announced the user's own press to them — so the lot is claimed in `expectOwnBid` at send
+time and the exact `is_mine` sequences from the response take over when it lands. The cost is that a
+rival's proxy counter-bid inside those few seconds goes unannounced, which is much the better error:
+that bidder is about to be shown the outbid outcome anyway.
+
+**A bid event refreshes `/me/bids` whenever we hold a row for that lot.** Whether a bid displaced
+the user is the server's to say — a rival's maximum is invisible here. Without this the list rendered
+a stale **WINNING** directly beside an alert saying someone else had just bid, which is a lie about
+someone's own money. `patchMyBid` reports whether the row was ours, so nothing is re-asked for lots
+the bidder has no stake in.
+
+**The sticky close bar says "next lot closes", never "auction closes".** That is about the data
+model, not about wording. Anti-snipe is per lot: extending the auction's own `ends_at` would let one
+contested lot hold the whole sale open, so each lot's `effective_ends_at` moves independently. Every
+lot shares a base close until the first extension fires, after which an auction-level countdown is
+simply wrong. `AuctionCloseBar` derives it from the **minimum `effective_ends_at` among the lots
+still open**, names that lot, and pins itself below the auction title.
+
+**It appears only inside the final hour.** Above that it is one quiet static line —
+`29 lots · Closes Monday, 14 September at 19:37`, from `lot_count` and `ends_at`. `CLAUDE.md`'s own
+reasoning for `plain` applies here: an alarm on a clock that runs for six days is crying wolf. Under
+it sits one line of plain explanation built from the auction's **real** `anti_snipe_window_seconds`,
+`anti_snipe_extension_seconds` and `max_extensions`, never hardcoded minutes.
+
+It considers only the pages loaded so far. All lots share a base close until an extension moves one,
+so page one holds the earliest in practice, and the set narrows as the list pages in.
+
+**The bar is gated on `auction.status === "live"`, and must never contradict the auction badge.**
+Without that gate it rendered on an auction badged `Ended` — reproduced on the seed as
+`Ended` above `NEXT LOT CLOSES · LOT 11 · 02:23 left`, on a lot whose bid buttons were already
+disabled. An auction that is over has no next lot to close.
+
+**This is not the "gate on the clock, not `status`" rule being broken.** That rule is about *can I
+bid*, where the clock is authoritative because `status` lags the lifecycle worker. Whether to raise
+an urgency bar is a different question, and `ended` answers it outright. The lot-level filter still
+uses `isLotOpen`; the auction-level one is the auction's own status.
+
+The backend does not itself produce that state — `end_finished_auctions` marks an auction ended only
+once its last lot has, and cancelling an auction cancels its still-open lots — so the data came from
+a previous session's manual SQL. The client can still reach it on clean data through cache skew: the
+auction and lots queries refresh independently, and only the first `SUBSCRIBE_AHEAD` lots receive
+`lot_closed` over the socket, so a fresh `ended` auction beside a stale page of `live` lots is an
+ordinary few seconds, not a corruption. The guard is correct either way.
+
+**The count lives on that line and nowhere else.** The list used to print its own
+`{lots.length} lots`; with the auction's own total above it, the two disagreed while paging.
+
+**A ⓘ on the auction header opens the rules**, built entirely from the current `AuctionOut`: the
+deposit (`deposit_amount_minor`, and an honest "no deposit is needed" at zero), the close in the
+user's zone **with the zone named**, how anti-snipe really works, and the existing `PaymentDetails`
+block. Three things stakeholders asked for are left out rather than invented — buyer's premium (the
+column exists but `AuctionOut` does not expose it; see `NOTES.md`), VAT treatment and the collection
+address. It is member-only: the public auction shape carries no anti-snipe fields and an anonymous
+visitor has no payment reference.
+
+**Cards are separated by space, a full border and a shadow — not by a gold edge.** `gap-3` between
+rows, the existing full `--border`, the divider above the button row, and one new token,
+`--card-shadow`. The mockups showed a gold left edge and it was **declined**: `--accent` is the bid
+button's colour, and putting brand gold on every card edge dilutes the one thing on the screen that
+means "press me". The neutral border separates just as well and leaves the accent to the lot pill
+and the Bid button.
+
 **My bids is one list.** It had three tabs — Bidding, Interested, Passed — and the last two listed
 swipes. They went with swiping rather than leaving a single tab pretending to be a choice.
+
+## Lot search
+
+One input, results below, at `/search` — reached from a search icon on the **auctions** header, not
+from a fourth nav tab. Search is global, so it belongs to the screen that owns the whole catalogue
+rather than inside one auction; and a tab is an option on every screen forever, which is the move
+round 1 asked us to stop making.
+
+**It matches the lot title (substring) and the lot number (exact). It does not match the
+description, and it does not match the auction's name.** The empty-result copy says so out loud,
+because a search that silently ignores half of what someone typed teaches them it is broken.
+
+**The minimum term length is mirrored in the client**, which normally the guardrails forbid. It is
+allowed here because a minimum term length is an **input precondition, not a filter over data**: if
+the server raises its minimum, the stale client value produces a 422 that is loud and immediate
+rather than a quietly wrong result set. That is the acceptable drift direction, and the 422 is
+handled anyway. **A purely numeric term is exempt at any length** — it is an equality on an indexed
+lot number rather than a substring scan, and every auction has a lot 1, so blocking `7` would break
+the most obvious search there is.
+
+### `/me/bids` is not trustworthy here, and that is the whole reason this section exists
+
+**`GET /me/bids` is windowed by the two-week rule. Search is deliberately not.** Search reaches
+auctions that aged out of `GET /auctions`, because "what did that go for" is the question it
+answers. So a search row can be a lot the bidder bid on and even won, absent from `/me/bids` *only
+because that endpoint filtered it* — and with a small dataset the response is nowhere near the 200
+cap, so `truncated` is false and `useMyBidStatus.statusFor` answers `none` with total confidence.
+The row then reads **NOT BIDDING** on someone's own money. That is exactly the failure the `unknown`
+state was invented to prevent, arriving through a door nobody built it for.
+
+**The rule that resolves it: a `/me/bids` row we hold is positive evidence and is true in both
+directions; only its *absence* is ambiguous, and only outside the window.**
+
+So `SearchScreen` splits on the clock, not on `status`:
+
+- **A biddable row** (`isLotOpen`) belongs to an auction that has not ended, so it is inside the
+  window and `/me/bids` reliably has it. The join is sound and all four bid states render exactly as
+  they do on the auction list.
+- **A closed row** shows the **lot's outcome** instead — Sold, Unsold, Reserve not met — from
+  `lotOutcome`, in the clock line's own reserved slot, with no bid-state line at all. That is what
+  someone searching for a finished item actually wants, and it needs no join. Where we *do* hold the
+  row it is used, but only in the direction it can be trusted: `amILeading` is passed when
+  `statusFor` says `leading`, which turns the pill into "You won"; it is never inferred from a row
+  we may simply not have.
+
+The trap was reproduced before it was fixed — see NOTES.md. **The unreliable case is simply never
+asked**, which is why this needed no extra mode on `useMyBidStatus` and no second `/me/bids` call.
+
+**Do not solve this by reimplementing the window in the client.** The window is a server setting and
+a second copy will drift. And never assert `none` for a bid state the client cannot determine: the
+alternative here is silence plus a fact about the lot, which is always available and never a lie.
+
+### The cursor, and the one thing about it that must not be "fixed"
+
+**The cursor is opaque. It goes back exactly as `X-Next-Cursor` gave it — never parsed, decoded or
+constructed.** It carries the compound sort key (a lot number is unique only inside an auction, and
+this is cross-auction) *and* a pinned instant, and the server answers a malformed one with a 422.
+Note that `listLots` does `Number(nextCursor)` for the auction lot list; `searchLots` must not, and
+its page param is a string for that reason.
+
+**The pinned instant means a long pagination walk can list a lot as biddable slightly after it
+actually closed. Leave it.** Pinning is what makes the walk skip and repeat nothing; the row gates on
+the clock through `isLotOpen`, so both its buttons disable on their own.
+
+### Everything else it reuses
+
+**`LotSearchResultOut` is a structural superset of `LotSummary`**, so `LotRow` renders it unchanged —
+the gold lot pill, the five clock tiers, the two buttons, the bid state. **`LotSummary` was not
+widened** to carry `auction_name` or `currency_code`: its whole job is naming what the member *and*
+the anonymous card shapes both have, and search is member-only. The row takes those two as ordinary
+optional props instead.
+
+- **`auction_name` sits above the title** in the quietest type on the row. The auction is context;
+  the lot is the subject. A lot number alone is ambiguous across auctions, which is why the backend
+  puts the name on the shape at all.
+- **`currency_code` is passed to `Money` per row.** ZAR is the only currency in practice; doing it
+  anyway is what stops the day it isn't from being a bug hunt.
+- **Paging is `useLoadMoreOnScroll` and the `X-Next-Cursor` / `X-Has-More` pair**, as the auction
+  lot list does.
+- **The query key is `["lots", "search", term]` — deliberately under the `lots` prefix**, so
+  `patchLot` finds search pages while walking `["lots"]` and a bid response or a socket event
+  updates a search row with no wiring of its own.
+- **The term is in the key**, so React Query drops the results of a term the user has typed past.
+  The input is debounced 300ms on top of that: a ten-character term costs three or four requests
+  against a 60/min ceiling.
+- **Only biddable results are subscribed, and only the first 12.** A closed lot's price cannot move.
+  The socket caps a connection at 200 lots; 12 is what the auction screen holds, so paging deep
+  through search never approaches it.
+
+**The search query has no retry rule of its own, because the app-wide one now covers it.** It used
+to carry a local predicate for 429/422; that reasoning lives in `providers.tsx` — see "One retry
+rule" below — and a second copy of it here would be a thing to keep in step. `SearchCursorError`
+survives, but as an `ApiError` carrying the 422 it wraps rather than a bare `Error`: the class is
+what the screen branches on, the status is what the retry rule reads. Because it now carries a 422,
+`termRefused` has to say "without a cursor" explicitly instead of inferring it from the status.
+
+**The two 422s mean opposite things and are told apart by whether we sent a cursor** — the only
+place that fact is still in scope. A short term is the user's input and gets the server's own words
+inline on the field, with nothing below it; a rejected cursor is our bug and gets a reset of the
+walk rather than any blame on the term. The 429's wait goes through `formatDuration`, because
+"3591s" is not a wait anyone can picture. The 401 is the client's single-flight refresh and gets no
+second path.
+
+**`/search` is deliberately absent from `lib/auth/publicPaths.ts`.** There is no public or anonymous
+search endpoint. The guard's failure direction is already the safe one — a new route ships guarded
+unless someone allowlists it — so this needs no action, only the discipline never to "fix" a
+redirect by widening the allowlist. An anonymous visitor on `/search` should meet the guard, not a
+screen that 401s.
 
 ## Lot photography
 
@@ -376,7 +727,7 @@ needs. So the same three tokens exist, and which one you reach for depends on ho
 | `--accent-ink` | the label on a gold fill | `#0A0A0B` | `#0A0A0B` — unchanged |
 | `--accent-text` | accent as **text**, and thin marks that must be seen (focus rings, live dot, toast bar) | `#F6C000` | `#806200` — darkened same hue |
 | `--accent-edge` | border on a brand fill | `transparent` | `#806200` |
-| `--on-fill` | ink on a filled **danger** mark — today the final-minute countdown | `#0A0A0B` | `#FFFFFF` |
+| `--on-fill` | ink on a filled **danger** mark — the final-hour countdown | `#0A0A0B` | `#FFFFFF` |
 
 **The gold stays gold in both themes**, exactly as the lime did — it is the brand colour and must
 not be darkened into something else in light mode. Only the *text* and *edge* variants diverge.
@@ -391,8 +742,17 @@ warmth by failing a non-text boundary.
 
 **`--undo` was deleted.** It was a hue of its own for the undo gesture; there is no undo gesture.
 **`--on-fill` was kept and repurposed**: it encodes something still true — that the ink on a filled
-mark inverts between themes — and the final-minute countdown needs exactly that. It is a live token
+mark inverts between themes — and the final-hour countdown needs exactly that. It is a live token
 with one consumer, not a leftover.
+
+**`--card-shadow` is the one token this round added, and it is not a colour.** Lot cards are lifted
+off the page with it: `0 1px 2px rgb(0 0 0 / 0.5)` on dark, `0 1px 3px rgb(16 16 26 / 0.1)` plus a
+tighter second layer on light. It has no contrast ratio to clear. Being honest about what it does:
+on **dark** it is barely perceptible and the border does nearly all of the separating — the card
+surface sits at 1.08:1 against the page; on **light** (1.10:1, and a soft border) it is what makes a
+white card read as a card. Space and the border carry dark; the shadow carries light. Everything
+else this round reuses tokens that already existed, which is why the ratio table below needed no new
+values — only new rows confirming the pairings.
 
 **Green was left alone, and that was checked rather than assumed.** Every green in the app resolves
 to `--success`: the winning/outbid badge, the lot-detail outcome panel, the win modal, the toast,
@@ -424,6 +784,15 @@ rows the accent does not touch:
 | accent fill vs surface (button edge) | 10.92 | 1.69 -> `--accent-edge` at 3.40 vs the fill, 5.73 vs white |
 | input border (`--border-strong`) vs its fill | 1.16 (see below) | 3.12 |
 | card border vs surface (decorative) | 1.29 | 1.39 |
+| **lot-number pill:** accent-ink on the accent fill | 11.74 | 11.74 |
+| **bid states:** success / danger / muted on surface | 10.56 / 6.01 / 6.59 | 6.60 / 6.57 / 6.36 |
+| **hours tier:** text on surface | 16.89 | 18.04 |
+| **bid alert:** danger on the `danger/10` tint over surface | 5.35 | 5.58 |
+| **extension alert:** accent-text on the `accent/10` tint over surface | 9.04 | 5.43 |
+| **reschedule alert:** text on surface-raised | 15.26 | 15.45 |
+| **sticky close bar:** muted on bg | 7.08 | 5.79 |
+| **AUTO BID sublabel:** muted on surface-raised | 5.95 | 5.44 |
+| card surface vs page bg (what `--card-shadow` supplements) | 1.08 | 1.10 |
 
 **A correction to the previous table.** Light `success` was recorded as 6.7 / 7.3 / 6.3. The shipped
 token is `#146b33` and actually measures **6.01 / 6.60 / 5.69**; the recorded figures correspond to
@@ -555,13 +924,22 @@ digits. Production runs on the default.
 - `components/` — UI primitives (`ui/`) plus feature components grouped by surface.
 - `lib/api/` — typed client, endpoints, zod schemas, error classes, query keys, cache writers.
 - `lib/auth/` — session store, device id, login flow state.
-- `lib/realtime/` — socket client, event→cache reducer, connection/sequence store.
+- `lib/realtime/` — socket client, event→cache reducer, connection/sequence store. The store also
+  holds the per-lot transient `LotNotice` that a row renders as an in-card alert, and the record of
+  which bid sequences were the caller's own.
 - `lib/format/` — money, time, lot status. Pure functions; they take `now` rather than reading it.
 - `lib/hooks/` — shared hooks (paging, subscriptions, ticker, bid submission, list actions).
 - `types/` — API types inferred from the zod schemas.
 
 `lib/browse/` and `lib/bid/` are gone — they held the layout preference, the browse-session history
 and the pending-bid store, none of which have a subject any more.
+
+New this round: `components/search/SearchScreen.tsx` and `lib/hooks/useLotSearch.ts` — the
+`/search` screen and its paging, member-only. `components/lot/LotList.tsx` now **exports `LotRow`**,
+because search reuses the row rather than forking it.
+
+The round before: `components/auction/AuctionCloseBar.tsx` (the sticky final-hour header) and
+`components/auction/AuctionInfoSheet.tsx` (the ⓘ sheet), both member-side.
 
 Three files carry most of the risk and are worth reading before changing anything nearby:
 `lib/api/client.ts`, `components/bid/BidSheet.tsx`, `lib/realtime/socket.ts`.
@@ -585,7 +963,7 @@ the backend does not infer a country from `082…`.
 
 Note the rate limits when scripting against it: OTP requests are capped per number *and* per IP
 (a heavy test run will lock you out for the best part of an hour), and bids are capped at 60/min
-per lot.
+per lot, and **lot search at 60/min per user** with a real `Retry-After`.
 
 ## Guardrails
 
@@ -594,12 +972,23 @@ per lot.
 - `next-themes` is the one dependency added outside the original stack: it exists for the
   pre-paint script, OS-change handling, cross-tab sync and SSR agreement, all of which are easy to
   hand-roll incorrectly. `framer-motion` is now the one whose justification has *shrunk* — see the
-  stack section.
+  stack section, and note that the in-card alerts deliberately did **not** become a fifth consumer:
+  their entrance is a CSS keyframe (`notice-in`), whose final frame is the settled, fully legible
+  state so the reduce-motion snap lands on the message. Same property as `urgent`.
 - **Never put the access token in storage**, and never read the refresh token from JS.
 - **Never compute `minimum_next_bid_minor`, or reveal a reserve amount.**
 - **Never re-apply a filter the server already owns.** `GET /auctions` and `GET /me/bids` exclude
   anything whose auction ended more than two weeks ago. A second copy of that rule in the client is
-  a second thing to keep in step, and it will drift.
+  a second thing to keep in step, and it will drift. **`GET /lots/search` is exempt from that window
+  on the server**, which is precisely why `/me/bids` cannot be joined against every search row —
+  see "Lot search".
+- **Never assert a bid state the client cannot determine.** `none` means "we know they have not
+  bid", and it is only knowable where `/me/bids` is complete for that lot. Everywhere else the
+  answer is `unknown`, or silence plus a fact about the lot — never "NOT BIDDING".
+- **Never widen the allowlist to fix a redirect.** `/search` is signed-in only and is deliberately
+  absent from `lib/auth/publicPaths.ts`; there is no anonymous search endpoint.
+- **Never parse an opaque cursor.** `X-Next-Cursor` from search carries a compound sort key and a
+  pinned instant; it goes back verbatim or it comes back a 422.
 - **Don't create git commits.** Stage the work and let the developer review it.
 - **Delete rather than deprecate.** Nothing is live.
 - Verify against the running backend, don't reason about it. Every bug worth finding here was found
@@ -628,12 +1017,17 @@ Accepted, with reasons. Please don't re-raise them.
   from whatever host the backend serves, and a `remotePatterns` allowlist breaks silently on a new
   one. This costs more on lot detail now that images are letterboxed and openable full screen, and
   it is the reason a lot with 20 photos is heavier than it needs to be.
-- **A plain bid sets a maximum equal to itself**, so a row reads "Raise Maximum" immediately after a
-  no-maximum bid. That is the backend's model faithfully reflected, not a labelling bug.
 - **Eight exported symbols have no callers** — `BidStatus`, `PublicLotImage`, `UserRole`,
   `UserStatus`, `clockOffsetMs`, `isClockSynced`, `formatMoneyDelta`, `normalisePhone`. All eight
   predate the simplification (verified against `HEAD`), and the four in `types/api.ts` are arguably
   deliberate contract surface. Left alone rather than swept up inside an unrelated change.
+
+**Removed from this list:** *"A plain bid sets a maximum equal to itself, so a row reads 'Raise
+Maximum' immediately after a no-maximum bid."* The backend still behaves exactly that way — nothing
+was fixed server-side. What changed is that the left button no longer reports server state, so there
+is no longer a symptom to describe. The label was never the right place to encode a maximum; the
+`Your auto bid: R2 500` line is, and it is *correct* to appear straight after a plain bid. The
+condition is gone rather than papered over, which is why the entry is deleted rather than reworded.
 
 `NOTES.md` holds the longer record: judgement calls, backend requests, and the end-to-end
 verification runs including the bugs they caught.

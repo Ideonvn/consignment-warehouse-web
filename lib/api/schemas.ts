@@ -123,6 +123,39 @@ export const lotCardSchema = z.object({
 
 export const lotCardListSchema = z.array(lotCardSchema);
 
+/**
+ * One row of a cross-auction lot search.
+ *
+ * **A structural superset of `LotSummary`, and deliberately not `lotCardSchema`
+ * extended.** The backend builds it standalone, so it carries what a row needs
+ * to stand on its own away from an auction screen — `auction_name` and
+ * `currency_code` — and omits `extension_count`, which no row renders. It is
+ * not a `LotCard`: `LotSummary` is what the presentational row actually takes,
+ * and that type stays as narrow as it is. See "Lot search" in CLAUDE.md.
+ */
+export const lotSearchResultSchema = z.object({
+  id: z.string(),
+  auction_id: z.string(),
+  /** A lot number alone is ambiguous across auctions, so every row names its sale. */
+  auction_name: z.string(),
+  currency_code: z.string(),
+  lot_number: z.number(),
+  title: z.string(),
+  status: lotStatusSchema,
+  starting_price_minor: z.number(),
+  current_bid_minor: z.number().nullable(),
+  minimum_next_bid_minor: z.number(),
+  bid_count: z.number(),
+  /** The resume point for this lot's socket subscription. */
+  bid_sequence: z.number(),
+  effective_ends_at: z.string(),
+  reserve_met: z.boolean(),
+  primary_image_url: z.string().nullable(),
+  my_auto_bid_max_minor: z.number().nullable(),
+});
+
+export const lotSearchResultListSchema = z.array(lotSearchResultSchema);
+
 export const lotImageSchema = z.object({
   id: z.string(),
   url: z.string(),

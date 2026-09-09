@@ -11,6 +11,7 @@ import type {
   lotImageSchema,
   ledgerEntrySchema,
   ledgerEntryTypeSchema,
+  lotSearchResultSchema,
   lotStatusSchema,
   myBidSchema,
   notificationChannelSchema,
@@ -47,6 +48,15 @@ export type LotCard = z.infer<typeof lotCardSchema>;
 export type LotDetail = z.infer<typeof lotDetailSchema>;
 export type LotImage = z.infer<typeof lotImageSchema>;
 export type LotStatus = z.infer<typeof lotStatusSchema>;
+
+/**
+ * A search row. **A structural superset of `LotSummary`**, so the presentational
+ * row takes it unchanged — which is why `LotSummary` was *not* widened to carry
+ * `auction_name` or `currency_code`: those exist on the search shape only, and
+ * `LotSummary`'s whole job is naming what the member *and* anonymous card
+ * shapes both have.
+ */
+export type LotSearchResult = z.infer<typeof lotSearchResultSchema>;
 
 export type Bid = z.infer<typeof bidSchema>;
 export type BidStatus = z.infer<typeof bidStatusSchema>;

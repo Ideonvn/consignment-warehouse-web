@@ -9,6 +9,8 @@ import { useAuctionBrowse } from "@/lib/hooks/useAuctionBrowse";
 import { useLotActions } from "@/lib/hooks/useLotActions";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
 import { LotList } from "@/components/lot/LotList";
+import { AuctionCloseBar } from "@/components/auction/AuctionCloseBar";
+import { AuctionInfoSheet } from "@/components/auction/AuctionInfoSheet";
 import { BidSheet } from "@/components/bid/BidSheet";
 import { BidOutcomeSheet } from "@/components/bid/BidOutcomeSheet";
 import { Countdown } from "@/components/ui/Countdown";
@@ -73,6 +75,7 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
         ) : (
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-sm font-medium">{auction.name}</h1>
+            <AuctionInfoSheet auction={auction} />
             {auction.status === "live" ? (
               <StatusPill tone="live" pulse>
                 <Countdown endsAt={auction.ends_at} plain />
@@ -87,6 +90,8 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
           </div>
         )}
       </div>
+
+      {auction ? <AuctionCloseBar auction={auction} lots={browse.lots} /> : null}
 
       {auction ? (
         <LotList

@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/api/queryKeys";
+import { useRealtimeStore } from "@/lib/realtime/store";
 import type { BidResult, LotCard, LotDetail, MyBid } from "@/types/api";
 
 /**
@@ -41,11 +42,13 @@ export function patchLot(queryClient: QueryClient, lotId: string, patch: LotPatc
   });
 }
 
+/** Returns whether the user actually has a row for this lot. */
 export function patchMyBid(
   queryClient: QueryClient,
   lotId: string,
   patch: Partial<MyBid>,
-): void {
+): boolean {
+  let found = false;
   queryClient.setQueriesData({ queryKey: ["my-bids"] }, (existing: unknown) => {
     if (!Array.isArray(existing)) return existing;
     const rows = existing as MyBid[];
@@ -53,10 +56,12 @@ export function patchMyBid(
     const next = rows.map((row) => {
       if (row.lot_id !== lotId) return row;
       touched = true;
+      found = true;
       return { ...row, ...patch };
     });
     return touched ? next : existing;
   });
+  return found;
 }
 
 /**
@@ -64,6 +69,15 @@ export function patchMyBid(
  * close time when anti-snipe fired — so nothing here needs a refetch.
  */
 export function applyBidResult(queryClient: QueryClient, result: BidResult): void {
+  // The socket echoes this bid back to us like any other. Remembering which
+  // sequences were ours is what stops the card announcing "another bidder just
+  // bid" about the press the user just made — and a proxy counter-bid placed
+  // for a rival in the same breath is *not* ours, so it still announces.
+  useRealtimeStore.getState().noteOwnBids(
+    result.lot_id,
+    result.bids.filter((bid) => bid.is_mine).map((bid) => bid.sequence),
+  );
+
   patchLot(queryClient, result.lot_id, {
     current_bid_minor: result.current_bid_minor,
     minimum_next_bid_minor: result.minimum_next_bid_minor,

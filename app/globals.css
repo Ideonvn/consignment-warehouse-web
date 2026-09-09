@@ -36,10 +36,15 @@
   --border-strong: #2a2a2e;
   --danger: #ff5a5a;
   --success: #4ade80;
-  /* Ink for text sitting on a filled DANGER mark — today the final-minute
-     countdown. The relationship inverts between themes (a light red fill on
-     dark, a dark red one on light), so it is a token rather than a literal. */
+  /* Ink for text sitting on a filled DANGER mark — the final hour's countdown.
+     The relationship inverts between themes (a light red fill on dark, a dark
+     red one on light), so it is a token rather than a literal. */
   --on-fill: #0a0a0b;
+  /* Lot cards, lifted off the page. On dark the border does nearly all of the
+     separating and this is barely perceptible by design; on light, where the
+     border is soft, it is what makes a white card read as a card on a near-white
+     page. Not a colour, so it has no contrast ratio to clear. */
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
 }
 
 /*
@@ -72,6 +77,7 @@
   --success: #146b33;
   /* Light inverts the relationship: the fill is dark, so the ink is white. */
   --on-fill: #ffffff;
+  --card-shadow: 0 1px 3px rgb(16 16 26 / 0.1), 0 1px 2px rgb(16 16 26 / 0.06);
 }
 
 @theme inline {
@@ -96,9 +102,12 @@
 
   --radius-card: 1.5rem;
 
+  --shadow-card: var(--card-shadow);
+
   --animate-pulse-accent: pulse-accent 900ms ease-out;
   --animate-live: live 2s ease-in-out infinite;
   --animate-urgent: urgent 1s ease-in-out infinite;
+  --animate-notice: notice-in 200ms ease-out;
 }
 
 @keyframes pulse-accent {
@@ -119,7 +128,8 @@
  * The FULL-strength pill is both endpoints and the dim moment is the middle, so
  * the reduce-motion rule below — which snaps every animation to its final
  * frame — lands on the emphatic state rather than the faded one. Dropping the
- * animation must never drop the information. */
+ * animation must never drop the information. The pill itself is applied for the
+ * whole final HOUR; only this breath is reserved for the final minute. */
 @keyframes urgent {
   0%,
   100% {
@@ -129,6 +139,20 @@
   50% {
     opacity: 0.72;
     transform: scale(0.97);
+  }
+}
+
+/* A transient in-card alert arriving. Its final frame is the settled, fully
+ * legible state, so the reduce-motion snap lands on the message rather than on
+ * a half-faded one — the same property the `urgent` keyframe has. */
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

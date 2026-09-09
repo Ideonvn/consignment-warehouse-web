@@ -3,23 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getPublicAuction, listPublicLots, listPublicPrices } from "@/lib/api/publicEndpoints";
-import { ApiError } from "@/lib/api/errors";
 import { noteSeen } from "@/lib/public/seen";
 import { useNow } from "@/lib/hooks/useTicker";
 import { msUntil } from "@/lib/format/time";
 import type { PublicAuction, PublicLotCard } from "@/types/api";
 
 const PAGE_SIZE = 24;
-
-/**
- * A 404 here is an answer, not a hiccup: private, draft and missing all look the
- * same by design, and none of them fix themselves. Retrying turns one dead link
- * into three requests and delays the message the visitor needs.
- */
-function retryUnlessGone(failureCount: number, error: unknown): boolean {
-  if (error instanceof ApiError && error.status === 404) return false;
-  return failureCount < 2;
-}
 
 /**
  * How often prices are re-read, and why each number is what it is.
@@ -64,7 +53,6 @@ export function usePublicAuction(auctionId: string): PublicAuctionBrowse {
   const auctionQuery = useQuery({
     queryKey: ["public", "auction", auctionId],
     queryFn: () => getPublicAuction(auctionId),
-    retry: retryUnlessGone,
   });
 
   const lotsQuery = useInfiniteQuery({
@@ -77,7 +65,6 @@ export function usePublicAuction(auctionId: string): PublicAuctionBrowse {
       const cursor = Number(lastPage.nextCursor);
       return Number.isFinite(cursor) ? cursor : undefined;
     },
-    retry: retryUnlessGone,
   });
 
   const auction = auctionQuery.data;
@@ -128,7 +115,6 @@ export function usePublicAuction(auctionId: string): PublicAuctionBrowse {
     // Only while someone is looking: a hidden tab is not watching a price.
     refetchIntervalInBackground: false,
     staleTime: 0,
-    retry: retryUnlessGone,
   });
 
   // Stop rather than poll a tab nobody has touched for ten minutes.

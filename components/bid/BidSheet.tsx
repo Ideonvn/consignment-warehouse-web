@@ -209,7 +209,7 @@ function BidSheetBody({
             )}
           </p>
           <p className="mt-0.5 text-xs text-text-muted">
-            <Countdown endsAt={endsAt} prefix="Closes in" />
+            <Countdown endsAt={endsAt} />
           </p>
         </div>
       </div>

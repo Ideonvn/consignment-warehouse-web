@@ -50,6 +50,16 @@ Judgement calls, backend requests, deferrals, and the final journey result.
 - **CORS with credentials is required.** The client sends `credentials: "include"` on every call so
   the HttpOnly refresh cookie flows; the backend must keep `Access-Control-Allow-Credentials: true`
   with a non-wildcard origin. (It does today.)
+- **Expose the buyer's premium on `AuctionOut`.** *(Raised in the urgency/wording round.)* The
+  column exists on the auction — the seed prints it per auction (10%, 15%, none) — but the bidder's
+  `AuctionOut` does not carry it, so the new ⓘ information sheet cannot answer the one question it
+  exists to answer: **"what will this actually cost me?"** A bidder who wins at R10 000 and is then
+  invoiced R11 500 has been surprised by a number the platform knew all along, on a real-money
+  screen. A read-only field (percentage or basis points, plus whether it applies) is all that is
+  needed; the sheet already has the place to put it. Left out entirely rather than guessed at —
+  inventing "typically 10–15%" on a page about money is worse than silence. Two further items the
+  same sheet was asked for have **no data anywhere** and are not backend requests so much as
+  product gaps: VAT treatment, and the collection address.
 
 ## Bidder accounts and deposits
 
@@ -706,3 +716,507 @@ JS touches the gesture — the browser is being asked to do it. To confirm in th
 
 This run withdrew Spring Collectables lot 16, rescheduled two auctions, and placed ~65 bids on lot
 1. **`make seed` was re-run afterwards**, so the database is back to the documented dataset.
+
+---
+
+# Urgency-and-wording round (clock tiers, constant labels, in-card alerts)
+
+Round 2 of stakeholder feedback asked for **clearer, less technical wording** and **much more
+urgency near a lot's close** — the second being close to the opposite of round 1's "fewest buttons,
+cleanest screen". The organising rule that makes both true at once is recorded at the top of
+`CLAUDE.md`: **urgency is a function of the clock, not a permanent feature of the layout.**
+
+## What this round changed
+
+- The left button is a constant two-line **AUTO BID / Set your maximum**. The maximum moved to a
+  data line, `Your auto bid: R2 500`, present only when there is one.
+- The right button is **BID R1 200** (uppercase), amount still through `Money`.
+- The lot number is a gold `--accent` pill, top-right, on the title's own line.
+- All four bid states carry an icon *and* a word: WINNING / OUTBID / NOT BIDDING / BID STATUS
+  UNKNOWN. `unknown` survives as its own state.
+- `Countdown` gained five clock tiers and escalates on its own; the existing final-minute alarm was
+  extended down to the final hour rather than rebuilt.
+- `AuctionCloseBar`: a quiet `29 lots · Closes Monday, 14 September at 19:37` line that becomes a
+  pinned **NEXT LOT CLOSES** alarm inside the final hour, derived from the minimum open lot clock.
+- In-card transient alerts for `bid`, `lot_extended` and `lot_rescheduled`, all off the existing
+  socket fan-out.
+- `AuctionInfoSheet`: a ⓘ on the auction header, built only from fields `AuctionOut` already has.
+- Card separation: `gap-3`, the existing full border, and one new token `--card-shadow`.
+
+## Judgement calls this round
+
+- **The gold left-edge accent on cards was declined.** `--accent` is the bid button's colour and the
+  lot pill's; putting it on every card edge dilutes the one thing on screen that means "press me".
+  The neutral border plus space separates just as well. (Had it been taken, that edge would have
+  needed `border-radius: 0` or it renders as a detached sliver.)
+- **The sticky header reads "NEXT LOT CLOSES", with the lot number beside it and the pill below.**
+  The stakeholder's phrase was "NEXT LOT CLOSES IN"; the countdown's own hour-tier wording is
+  `09:42 left`, so the literal phrase would have read "NEXT LOT CLOSES IN 09:42 left". The label
+  keeps the meaning, and naming the lot ("Lot 3") is worth more than the preposition.
+- **`plain` now suppresses the whole escalation, not just the alarm.** An auction-level clock keeps
+  the exact wording and format it had. That is the smallest possible diff at the ten `plain` call
+  sites and the honest reading of the existing rule: a clock nobody bids against should not adopt a
+  bidding deadline's language either.
+- **`mm:ss` is zero-padded through the final hour** (`09:42`, `00:42`), where the last minute used
+  to render `0:42`. Fixed width is what keeps the pill from reflowing as it counts down, which the
+  no-reflow requirement cares about more than the leading zero.
+- **The extension alert states the *measured* jump, not the configured window.** A bid at 3:26
+  remaining moves the close to now + 5 min, a gain of ~1:34 — "extended by 5 min" would be wrong
+  about what just happened on screen. If no cached close time is available to measure against, the
+  sentence stops at "extended" rather than inventing a figure.
+- **`lot_rescheduled` never borrows the extension's words.** It says "Closing time changed … now
+  closes 8 min earlier / later", because an admin cascade moves clocks in either direction.
+- **The list's own `{lots.length} lots` line was deleted.** With the auction's `lot_count` on the
+  header line, the two disagreed while paging.
+- **The ⓘ sheet is member-only.** `publicAuctionSchema` carries no anti-snipe fields and an
+  anonymous visitor has no payment reference, so there is nothing honest to put in it.
+
+## Verification, driven against the running backend
+
+`make dev-all` + `make seed`, Chrome at 360×480, real login (OTP `0000`), real socket. Full-page
+reloads drop the refresh cookie when the API is reached on a different host than the app, so the
+harness navigates client-side after signing in (this is already recorded above, under environment
+notes).
+
+**Three real defects were found by driving it, none of which would have shown up in review:**
+
+1. **`Intl.DateTimeFormat` threw on load.** The zoned formatter for the ⓘ sheet combined
+   `dateStyle`/`timeStyle` with `timeZoneName`, which Intl rejects — `TypeError: Invalid option :
+   option`, at module evaluation, taking the whole client bundle down. Rebuilt from component
+   options.
+2. **A bidder's own bid announced itself back to them** as "Another bidder just bid R99". The socket
+   echo routinely arrives *before* the bid's own HTTP response, so recording the `is_mine` sequences
+   from the response was always a step too late. Fixed by claiming the lot in `expectOwnBid` at send
+   time, with the exact sequences taking over when the response lands.
+3. **A stale `WINNING` badge sat beside "Another bidder just bid".** The `bid` handler only
+   invalidated `/me/bids` when a *lot-detail* cache entry existed, which it never does on the list
+   screen. Now `patchMyBid` reports whether the row was the caller's and the query is re-asked
+   exactly when it is. A lie about someone's own money is not a cosmetic bug.
+
+Also corrected before shipping: `formatDuration` could only express seconds/minutes/hours, so an
+admin cascade produced "now closes 7120 min earlier".
+
+### Clock thresholds, crossed live and measured
+
+Each lot clock was set a few seconds above a boundary and the crossing watched happen on the ticker
+— no reload, no refetch — with the row height read either side, at 360×480:
+
+| Crossing | before | after | height |
+|---|---|---|---|
+| 48h | `Closes in 2d 0h` | `Closes Friday at 19:52` | 181px → 181px |
+| 24h | `Closes tomorrow at 19:52` | `23h 59m left` | 181px → 181px |
+| 1h | `1h 00m left` | `59:56 left` | 181px → 181px |
+| 60s | `01:02 left` | `00:56 left` | 181px → 181px |
+
+### The alarm, with and without `prefers-reduced-motion`
+
+Computed styles on the row's clock element:
+
+| State | opacity | transform | fill | ink | size | weight | animation |
+|---|---|---|---|---|---|---|---|
+| < 60s, motion, dark | 0.743 | `scale(0.972)` | `#FF5A5A` | `#0A0A0B` | 14px | 700 | `urgent 1s` |
+| < 60s, reduced, dark | **1** | none | `#FF5A5A` | `#0A0A0B` | 14px | 700 | snapped |
+| < 60s, motion, light | breathing | breathing | `#B42318` | `#FFFFFF` | 14px | 700 | `urgent 1s` |
+| 60s–1h, dark | 1 | none | `#FF5A5A` | `#0A0A0B` | 14px | 700 | none |
+| 1–24h, dark | 1 | none | none | `#F5F5F6` | 12px | 500 | none |
+| > 48h, dark | 1 | none | none | `#9A9AA2` | 12px | 400 | none |
+
+Reduced motion changes opacity and transform and nothing else. Fill, ink, size and weight all
+survive, which is the property the `urgent` keyframe was written to have.
+
+### Socket events
+
+- **`bid`** — bidder A bid on lot 1 through the UI: WINNING, `Your auto bid: R119`, **and no
+  alert** (the fix in defect 2). Bidder B then bid over the API: the row flipped to **OUTBID** live
+  and showed `Another bidder just bid R 129`, which cleared itself after six seconds.
+- **`lot_extended`** — a rival bid on spring-collectables lot 4 at 3:26 remaining (anti-snipe window
+  300s). Response `extended: true, extension_count: 1`; the card's clock jumped to 04:58 and the
+  alert read `Bid received — lot 4 extended by 2 min`.
+- **`lot_rescheduled`** — `PATCH /admin/auctions/{id}` as the seeded admin. Every card in the
+  auction showed `Closing time changed — lot N now closes 2 min later`, never the word "extended".
+- **Own-bid absorption gotcha for the next person:** seeded bidders already hold proxies on most
+  lots, so a "rival" bid at exactly `minimum_next_bid_minor` is absorbed by their own standing
+  auto-bid — `accepted: true`, no new sequence, no event, nothing to see. Use a bidder with no
+  `auto_bids` row on that lot (lots 3, 4 and 5 of spring-collectables are untouched by the seed).
+
+### Sticky close bar
+
+- Nothing inside the final hour: no sticky element, quiet line reads
+  `29 lots · Closes Monday, 14 September at 19:37`.
+- Lot 2 at 50 min: pinned, `NEXT LOT CLOSES · Lot 2 · 49:26 left`, with
+  `A bid in that lot's last 5 min pushes its closing time out by 5 min, up to 20 times.` — the
+  auction's real 300/300/20.
+- Lot 3 then set sooner: the bar **renamed itself to lot 3**, which is the whole point of deriving
+  it from the minimum open `effective_ends_at` rather than from the auction.
+
+### The `unknown` bid state
+
+`/me/bids` could not be saturated for real: the largest seeded bidder has 10 lots and the whole
+database has 123, so 200 is unreachable. **Verified instead by lowering the client's own `LIMIT`
+from 200 to 3**, which exercises the identical truncation path — rows rendered `BID STATUS UNKNOWN`
+and the list's one-line notice appeared. `LIMIT` was restored to 200 afterwards.
+
+### Both themes, and the anonymous list
+
+Light and dark both driven end to end (light chosen the way a user chooses it — the stored
+`cw.theme` preference — since dark is the default regardless of the OS setting). Every new pairing
+was recomputed with the same WCAG relative-luminance harness and every one clears AA; the table is
+in `CLAUDE.md`. The tightest new value is the extension alert's accent-text on its own tint over
+surface, at 5.43 in light.
+
+Anonymous: same list, **zero buttons in a row**, no bid state, no ⓘ, and the same quiet summary
+line. `LotList` still takes `actions?` and absence is still the whole mechanism.
+
+### Test data left behind
+
+This run moved spring-collectables lot clocks around, placed a handful of bids on lots 1, 2 and 4,
+and rescheduled the auction once. **The auction's `ends_at` and every lot's `scheduled_ends_at` /
+`effective_ends_at` were restored to the seeded 7-minute stagger afterwards**, and extension counts
+zeroed. The extra bids remain; `make seed-fresh` clears them.
+
+# Lot search round (`/search`, cross-auction)
+
+Client half only. `GET /api/v1/lots/search` had already landed on the backend; **no backend change
+was needed or made**, and no new API field was asked for.
+
+## What this round added
+
+- `/search` — one input, results below, member-only. Reached from a search icon on the **auctions
+  header**. **No fourth nav tab**: the nav is still Auctions / My bids / Profile.
+- `lib/hooks/useLotSearch.ts` — the infinite query, the mirrored minimum, the opaque-cursor paging
+  and the two-different-422s distinction.
+- `lotSearchResultSchema` / `LotSearchResult`. **`LotSummary` was not widened** and `LotRow` was not
+  forked — it is now exported and takes `auctionName`, `outcome` and a nullable `bidStatus`.
+
+## Judgement calls this round
+
+**Task 1 — bid state on biddable rows only, outcome on closed rows (option a).** The reasoning is
+in `CLAUDE.md` under "Lot search"; the short version is that a biddable lot's auction has not ended,
+so it is inside `/me/bids`' two-week window and the join is sound, while a closed one may not be —
+and the unreliable case is then never asked. One refinement on top of the brief: **a `/me/bids` row
+we actually hold is positive evidence in both directions**, so it is still used on a closed row, but
+only in that direction — `amILeading` is passed when `statusFor` says `leading` (the pill becomes
+"You won") and is never inferred from a row we may simply not have. `useMyBidStatus` needed no
+change at all.
+
+**Option (b) was rejected on what it costs the ordinary case**: a screen full of "BID STATUS
+UNKNOWN" on any search for older sold items, which is exactly the search this endpoint exists to
+serve. It answers a question nobody asked ("did I bid on this three-month-old lot") loudly, and
+buries the one they did ask ("what did it go for").
+
+**The query key is `["lots", "search", term]`, under the existing `lots` prefix.** `patchLot` walks
+`["lots"]` and rewrites any cached lot page it finds, so a search row updates from a bid response
+and from the socket with no new wiring. Verified by bidding from a search result — the row's price,
+bid count, state line, auto-bid line and button figure all moved without a refetch of the search.
+
+**Search opts out of the app-wide retry for 4xx.** The default (`failureCount < 2`) retried the 429
+once, which spends the 60/min limiter again and pushes the user's own wait further out. Left as a
+**local** opt-out rather than changing the global default, which would touch every query in the app;
+worth raising separately, because retrying any 4xx is wrong everywhere.
+
+**The minimum term length is mirrored client-side** — a duplicated server rule, allowed because it
+is an input precondition rather than a filter over data and its drift direction is a loud 422. The
+numeric exemption is mirrored with it, so a single digit is never blocked.
+
+## Verification, driven against the running backend
+
+`npm run lint`, `npm run typecheck` and `npm run build` all clean. Everything below was driven in a
+real browser at 390×780 against `make dev-all` + `make seed`, signed in as `+27820000002`.
+
+### Task 1 — the case the whole task exists for
+
+`harvest-clearance-long-past` (20 days old, hidden from `GET /auctions`) is **found by search**: 8
+rows, each reading **Sold** with no bid-state line and both buttons disabled. `summer-antiques-ended`
+(3 days, inside the window) renders identically, and `Midweek Closing Sale lot 3` — a lot this
+bidder actually bid on and lost — also reads **Sold**, claiming nothing false either way.
+
+**Falsified by reverting it.** With `bidStatus={statusFor(lot.id)}` and no outcome, all eight harvest
+rows rendered **NOT BIDDING**, and the truncation notice did *not* appear — `/me/bids` returns 8
+rows for this bidder against a 200 cap, so `truncated` is false and `statusFor` answers `none` with
+total confidence. That is the lie, reproduced, on lots whose bid rows exist server-side (`status:
+won`) and which `/me/bids` omits purely because of the window. Reverted immediately afterwards.
+
+Not driven: the **"You won"** pill. No seeded bidder has a closed lot they are leading — this
+bidder's only closed row is one they lost — so the positive-evidence path was reasoned from
+`lotOutcome`'s existing, already-shipped behaviour rather than seen. It is the one item on this list
+that was not put in front of a browser.
+
+### Cross-auction results and ordering
+
+`q=7` (a **single digit**, not blocked by the mirrored minimum, one request) returns five rows in
+five different auctions, each naming its own:
+
+| # | Auction | Row |
+|---|---|---|
+| 1 | Spring Collectables | `Closes in 4d 23h` · OUTBID · `Your auto bid: R 51 332` |
+| 2 | Autumn Fine Jewellery | `Closes in 6d 23h` · NOT BIDDING |
+| 3 | Midweek Closing Sale | `Sold`, buttons disabled |
+| 4 | Summer Antiques (ended) | `Sold`, buttons disabled |
+| 5 | Harvest Clearance (long past) | `Sold`, buttons disabled |
+
+Biddable first by soonest close, then closed by most recently ended — holding **across** auctions.
+The buttons are gated by `isLotOpen` rather than by any auction-level flag: `biddingOpen` is simply
+passed true on this screen, because search spans auctions and there is no single auction status to
+read. Midweek Closing Sale is the case that proves it — the auction itself still reads `live` while
+its lots have closed, and its rows disable correctly anyway.
+
+### Paging
+
+`q=lot` walked to the end on scroll: **6 requests, 101 rows, 101 unique — no repeats, no gaps.** An
+independent walk of the same term straight against the API produced 6 pages and the same 101 ids.
+Cursors went back verbatim (`cursor=eyJ0IjoiMjAyNi0wOS0wOVQx…`); nothing decodes one.
+
+### Debounce and the `%` case
+
+`harvest` typed at 60ms/char (7 characters) cost **one** request. A term below the minimum sent
+**zero**. `lot 1%` returned a genuine **no match** rather than matching every `lot 1…` title, which
+is what a `%` leaking into a `LIKE` would have done.
+
+### Refusals
+
+- **429, real.** Burned the 60/min limiter with the same user's token, then searched: one request,
+  no retry, and *"Too many searches — Give it about 58 sec and try again."* from the actual
+  `Retry-After: 58`.
+- **422 on a malformed cursor**, forced by rewriting `cursor=not-a-cursor` on the way out: rendered
+  as *"These results went stale"* with a **Start again** button — nothing on the input, no blame on
+  the term — and the button dropped the walk back to page one (20 rows).
+- **422 on the term**, forced by rewriting `q=a`: the server's own words (*"search term must be at
+  least 2 characters"*) inline on the field with `aria-invalid`, and **nothing rendered below it**.
+  The first attempt showed "No matches" underneath the field error, which is a second and different
+  answer to the same refusal; fixed before this run.
+
+### A bid from a search result
+
+`Autumn Fine Jewellery lot 7`, pressed from the search row. One `POST /lots/{id}/bids`, and the row
+went from `R 50 000 · no bids yet` / NOT BIDDING to `R 50 000 · 1 bid` / **WINNING** /
+`Your auto bid: R 50 000`, with the Bid button's figure moving to `R 51 000` — all from `patchLot`
+reaching the search cache plus the `/me/bids` invalidation.
+
+### Liveness
+
+Only biddable rows are subscribed, capped at the first 12 — the same number the auction screen
+holds. **Nothing was needed for the 200-per-connection cap**: 12 from search plus 12 from an auction
+screen cannot approach it, and a deep pagination walk adds no subscriptions at all.
+
+### Both themes
+
+Dark and light both driven end to end on `/search`. **No new tokens and no new colour pairings** —
+the auction-name line is `--text-muted` on `--surface` (7.08 / 5.79) and the outcome pill is
+`StatusPill`'s existing muted tone (5.95 / 5.44), both already in `CLAUDE.md`'s table. The focus ring
+sits on the rounded wrapper, as `.field` intends.
+
+### Test data left behind
+
+One real bid of R 50 000 on `Autumn Fine Jewellery lot 7` by `+27820000002`, placed from the search
+screen. `make seed-fresh` clears it. Nothing else was moved: no clocks changed, no auctions
+rescheduled.
+
+---
+
+# Punch list from a live screenshot (lot pill, ended-auction bar, closed rows)
+
+Five things spotted by looking at the running app on an ended auction. Four defects against what was
+already agreed, one check.
+
+## 1. The lot pill said `1`, not `LOT 1`
+
+The word was only in an `sr-only` span, so the visible label was a bare number in a gold pill —
+decoration, not something a person reads back down a phone line. Put in, in `LotList` and in
+`AuctionCloseBar`, and the `sr-only` span removed with it (with the word visible it would have made
+a screen reader say "Lot LOT 1").
+
+**Measured for the widest realistic case** at 360×480 — `LOT 148` on the seed's longest title (249
+characters, spring-collectables lot 2, temporarily renumbered):
+
+| Row | pill | title | truncated | row height |
+|---|---|---|---|---|
+| `LOT 1`, long title | 54.2px | 148px | yes | **181px** |
+| `LOT 148`, same title | 72.7px | 129px | yes | **181px** |
+
+The pill costs no height at three digits; the title absorbs it exactly as `CLAUDE.md` says it
+should. No type was shrunk and nothing wrapped.
+
+## 2. The sticky close bar rendered on an **ended** auction — a guard gap
+
+The header showed `Ended` and, directly under it, `NEXT LOT CLOSES · LOT 11 · 04:22 left`.
+
+**Which of the two it was, established rather than assumed.** The backend cannot produce that state:
+`end_finished_auctions` marks an auction ended only *once its last lot has* ("An auction ends when
+its last lot has"), and `cancel_auction` cancels the still-open lots along with the auction. A clean
+`make seed-fresh` confirms it — no ended auction has a live lot. So the *data* came from the
+previous session's manual SQL, which is the artefact option in the punch list.
+
+**But the guard is still missing, and the client can reach the same state on clean data.** The
+auction and lots queries refresh independently, and only the first `SUBSCRIBE_AHEAD` (12) lots get
+`lot_closed` over the socket, so a freshly `ended` auction sitting beside a stale page of `live`
+lots is an ordinary few seconds. It is worth noting the seed *does* stagger lot clocks well past the
+auction's own `ends_at` — `midweek-closing-soon` ends at 20:02 with its last lot at 22:15 — so the
+skew window is not theoretical.
+
+Reproduced deliberately (auction forced to `ended`, lots left live and future) and tested both ways:
+
+- guard removed: `Ended` badge above `NEXT LOT CLOSES · LOT 11 · 02:23 left`, on a lot whose bid
+  buttons were already disabled — exactly the screenshot.
+- guard in place: no sticky element, quiet line reads `24 lots · Closed`.
+
+`AuctionCloseBar` now requires `auction.status === "live"` for the alarm branch. The per-lot filter
+is still `isLotOpen`; this is an auction-level question, not a "can I bid" one.
+
+## 3. A closed lot showed both "Bidding closed" and "NOT BIDDING"
+
+Two lines saying nearly the same nothing. `LotList` now does what `SearchScreen` already did: a
+closed row passes `bidStatus={null}` and an `outcome` from `lotOutcome`, so the clock slot carries
+the lot's own result and the bid-state line stands down. `amILeading` is read from a `/me/bids` row
+we actually hold — positive evidence only, so `You won` is never inferred from a row we may not
+have, and `NOT BIDDING` is never asserted where the app cannot tell.
+
+Verified on lots the worker genuinely closed (`ended_unsold`, `ended_sold`) rather than on forced
+statuses: closed rows read `No bids` / `Sold` / `You won` on one line and nothing underneath.
+
+**Row height on a closed row is 183px against an open row's 181px** — `StatusPill` is 26px against
+the clock line's `min-h-6` of 24px. Left as is: the 2px lands only on a row that has already closed
+and whose buttons are already disabled, whereas raising the reservation would grow every open row.
+
+## 4. `BID  R 174` had a double gap
+
+The button's contents were a bare text node beside `Money`, so the text node became its own flex
+item and picked up `Button`'s `gap-2` *on top of* the ordinary space. Wrapped in one `<span>`, so
+there is a single space and the label reads as one thing. **`formatMoney` was not touched** — the
+space inside `R 174` is Intl en-ZA currency formatting and is the same everywhere money appears.
+
+## 5. Lot 3's image — the seed, no change
+
+`SEED.md` line 15: *"Lot with no images (card must not break) | every auction's lot 3."* The API
+returns `primary_image_url: null` for lot 3 and a resolving URL for every other lot (spot-checked:
+`200 image/png` from the MinIO host). What renders is `LotImage`'s own deliberate placeholder — a
+gradient panel with a picture-frame icon, `role="img"` and an accessible name of `"<title> — no
+photo"` — not the browser's broken-image glyph. It is the fixture doing its job. Nothing changed.
+
+## Verification
+
+`npm run lint`, `npm run typecheck`, `npm run build` all clean. Driven against `make dev-all` +
+`make seed-fresh` at 360×480 in both themes, with no page errors. Final pass on untouched seed data:
+live auction `29 lots · Closes Monday, 14 September at 22:08`, no sticky bar, rows at 181px reading
+`LOT 1` / `BID R 99`; ended auction badged `Ended` with `24 lots · Closed`, no sticky bar, and rows
+reading `No bids` on one line.
+
+### Test data left behind
+
+The measurement renumbered a lot to 148 and force-closed several lots. **`make seed-fresh` was run
+afterwards**, so the database is back to the documented dataset.
+
+---
+
+# One retry rule, and releasing a failed bid's own-bid claim
+
+Two fixes before commit, both about a rule that had been discovered locally instead of centrally.
+
+## 1. One retry predicate, app-wide
+
+Three existed: `app/providers.tsx` (skip `SessionExpiredError`, retry everything else twice),
+`usePublicAuction`'s `retryUnlessGone` (adds 404, three call sites) and `useLotSearch`'s (adds all
+4xx and `SearchCursorError`). The same rule, rediscovered twice, for different status codes.
+
+It now lives in the default and both local predicates are deleted. **React Query's query-level
+`retry` overrides the default wholesale rather than composing with it**, which is exactly why a
+local predicate is a second copy of the reasoning rather than an addition to it — worth stating,
+because it is the reason the pattern kept recurring.
+
+**`SearchCursorError` had to survive, but not as a retry concern.** It is what `SearchScreen`
+branches on to offer "start again" instead of blaming the term, so the class stays. But it extended
+bare `Error` and therefore carried no status, so a blanket 4xx rule could not see it. It now extends
+`ApiError` with the 422 it wraps — which it *is*, only a differently-meaning one — and the local
+predicate goes entirely.
+
+One consequence, caught by reading rather than by the type-checker: `SearchScreen` derived
+`termRefused` from `apiError?.status === 422`, so once the cursor error carried a 422 it would have
+marked the search *field* invalid on a stale cursor. The comment there already said "a 422 **without
+a cursor** is the term itself"; that now has to be said in the condition rather than inferred from
+the status.
+
+### A correction to the brief, measured rather than assumed
+
+The instruction was to write into the comment that on a 429 "the retry is actively harmful, not
+merely wasteful — it spends the limiter again and pushes the user's own `Retry-After` further out".
+**That is not true of this backend, and the comment says what is.**
+
+Every limiter in the API goes through one helper whose docstring is explicit: *"INCR then EXPIRE
+only on first write, so the window is fixed rather than sliding."* Extra requests inside the window
+increment a counter whose TTL is already set, so they cannot lengthen the wait. Verified against the
+running API rather than by reading it — burn the search limiter, then make two retry-shaped
+requests:
+
+```
+first 429 after 60 requests    -> Retry-After: 60s
+after 2 retry-shaped requests  -> Retry-After: 60s, 60s
+=> the wait did NOT grow: fixed window
+```
+
+What is true, and what the comment now argues, is stronger in one way and weaker in another: a retry
+on a 429 here **cannot succeed by construction** — the window is 60s and the backoff is ~1s then
+~2s, so both retries land inside the same window — costing three requests, two backoff delays and a
+later answer for the user. It would be *actively* harmful against a sliding window, and that is
+recorded as the reason not to relax the rule for 429 later.
+
+**408 is noted as considered rather than overlooked.** It is the one 4xx that plausibly self-heals;
+this API never emits one (FastAPI has no path that returns it, and Caddy answers a timed-out
+upstream with 504, a 5xx, which is retried), so a blanket rule is right *here* and would not be in
+front of an API that does emit 408.
+
+### Verified
+
+- **A real 429 on search makes exactly one request.** The caller's own limiter was burned from the
+  API side (60 searches), then one search typed in the browser: `1` request,
+  `/lots/search?q=chair&limit=20`, and the screen read *"Too many searches — give it about 26 sec
+  and try again."*
+- **A 404 auction still costs one attempt per query.** A draft (private) auction opened anonymously
+  made two requests — the auction and its lots — one attempt each, not retries, which is what
+  `retryUnlessGone` used to guarantee.
+- Search's ordinary paths still work: `"Cape"` → 1 row, 1 request; a one-character term is refused
+  by the client and sends nothing at all.
+
+## 2. Release `expectOwnBid` when the bid fails
+
+`useBidSubmit` claims the lot *before* the request, because the socket echo of a bid usually beats
+its own HTTP response back, and `applyBidResult` clears the claim by naming the exact sequences that
+were ours. **A refusal produces no result, so it cleared nothing** and the claim stood for the full
+`OWN_BID_WINDOW_MS` — during which a rival's genuine bid on that lot was read as the caller's own
+echo and silently swallowed. Worst on the row the user has just been told they are *not* winning.
+
+The claim is a prediction that a bid is about to appear on that channel; a refusal is evidence the
+prediction is false, and holding a known-false prediction is strictly worse than dropping it. The
+success path already clears on evidence; the failure path had evidence and threw it away.
+
+**Narrower than "every path that produced no bid", deliberately.** Only a 4xx is that evidence. A
+5xx, a dropped connection or a `ResponseShapeError` all leave open that the bid *did* commit and its
+echo is still coming — and for `ResponseShapeError` it certainly did. Releasing there would
+reintroduce the exact failure the claim exists to prevent (announcing the caller's own bid back to
+them as somebody else's), whereas holding it costs one suppressed rival alert, which is the
+trade-off already documented. So the release is `cause instanceof ApiError && status 400–499`.
+
+### Verified, both directions
+
+Lot 2 of spring-collectables, where the caller already holds a bid. The price was raised with direct
+SQL — **no socket event fires for a SQL write**, so the client keeps a stale
+`minimum_next_bid_minor` and its BID button is genuinely refused:
+
+```
+refusal at +1971ms: "Someone bid first — the minimum is now R 51 000."   (real 422)
+rival bid at +3297ms -> 200, seq 2                                       (inside the 10s window)
+lot 2 at +5802ms: ... "Another bidder just bid R 510"                    => ALERT SHOWN
+```
+
+With the release removed and the same script re-run on the same data:
+
+```
+refusal at +1990ms: "Someone bid first ..."
+rival bid at +3244ms -> 200, seq 2
+lot 2 at +5773ms: (no alert)                                             => ALERT SWALLOWED
+```
+
+`npm run lint`, `npm run typecheck` and `npm run build` clean; no page errors in any run.
+
+### Test data left behind
+
+Lot 2's `current_bid_minor` and the rival's bids were restored to the seeded values after each run.
+The search and bid rate-limit counters were cleared with `make reset-limits`.
