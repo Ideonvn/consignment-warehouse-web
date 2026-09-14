@@ -330,6 +330,16 @@ and per lot — server-owned. Read it from the lot, from the bid response, or fr
 you someone bid first. It is now also *rendered*, on the Bid button, which makes this sharper rather
 than softer: the number on the button is the number that gets sent.
 
+**The figure is server-owned *and live*: every `bid` event carries `minimum_next_bid_minor`**, and
+`patchLot` writes it into every `["lots"]` entry, so the row's button (list and search alike) follows
+the price with no refetch. Keep the lot refetch in `events.ts` anyway — the event never carries a
+rival's maximum, so only the server's `am_i_leading` can say the user was displaced. **A live figure
+needs a hold**: `useSettledFigure` disables a bid button for `NEW_FIGURE_HOLD_MS` (500ms, measured —
+see NOTES.md) after its figure changes, so a press cannot commit at an amount that changed under a
+travelling thumb. Not on first render, and with no visual change on the row: a dim flash on every
+rival bid is noise, and the in-card notice already announces it. The outcome sheet holds on first
+appearance too; `BidSheet` holds only while the maximum is still the untyped minimum.
+
 ## The win
 
 **There are no gestures.** Left/right/up/down, undo, skip, the drag hints, the two-state armed

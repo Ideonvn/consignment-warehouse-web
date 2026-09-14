@@ -1320,3 +1320,72 @@ close moved to a few minutes out and the worker has since closed them. The aucti
 `anti_snipe_window_seconds` was set to 0 for the lot-8 run and restored to 120. A temporary
 `VERIFY-TEMP` deposit for bidder 3 was added for the light-theme run and deleted. `make seed` rebuilds
 the dataset.
+
+# The Bid button follows the price (`minimum_next_bid_minor` on the `bid` event)
+
+## What changed
+
+- **`bid` event schema** carries `minimum_next_bid_minor`, required, and the socket handler writes it
+  into `patchLot` beside the price. Every `["lots"]` entry follows, so the auction list, lot detail and
+  search rows all move with no wiring of their own.
+- **The lot refetch in `events.ts` stays**, with its comment corrected. The minimum is no longer a
+  reason for it. The other reason still stands: the event never carries a rival's maximum, so only the
+  server's `am_i_leading` can say the user was displaced, and that is what feeds `onOutbid`.
+- **`useSettledFigure` / `NEW_FIGURE_HOLD_MS`** (`lib/hooks/useSettledFigure.ts`) is now the single
+  home of the 500ms hold and its measurement. `BidOutcomeSheet` uses it with `holdOnMount: true`, the
+  row's Bid button with `holdOnMount: false`.
+- **The row's button during the hold: disabled, with no visual change.** `disabled:opacity-100` is
+  applied only while the hold is the sole reason. A 500ms dim on every rival bid across a list is a
+  flashing state; the in-card notice already announces the bid. It also covers the row's own double
+  tap: after a successful press the figure changes from the bid response, so a second tap cannot
+  commit at the next figure.
+
+## `BidSheet` (AUTO BID): the prompt's expectation was half right
+
+The `amount_minor` it sends is fresh. `minimum` is the max of the snapshot lot, the lot-detail query
+(which `patchLot` updates) and any 422. **But the maximum was not safe.** Until the user types, the
+field's value *is* the minimum (`typed ?? toMajorInputValue(minimum)`), and the confirm button reads
+"Confirm — up to R X". With a live minimum, that ceiling moves under the thumb, which is the same
+class of bug as the row. So `canSubmit` now also requires `typed !== null || minimumSettled`. Once the
+user has typed, their maximum is their own number and does not move, so typing never triggers a hold
+and "Go" straight after typing still works.
+
+Not changed, noted: the snapshot `lot.minimum_next_bid_minor` in that `Math.max` means an operator
+void that *lowers* the minimum would leave the sheet sending the older, higher `amount_minor`. This
+predates the change and needs a void on a lot with the sheet open.
+
+## Found while verifying: rows beyond the first 12 do not follow the price, by design
+
+`AuctionBrowseScreen` and `SearchScreen` subscribe the socket to `lots.slice(0, SUBSCRIBE_AHEAD)`
+(12), in load order, not visibility. Lot 13 on spring-collectables took three accepted bids (server
+minimums R 500, R 550, R 600) and its button stayed at **R 490** throughout. **The reported symptom
+therefore still reproduces from the 13th row down.** Pressing such a button is safe: the server
+refuses the stale figure and the one-tap refusal sheet offers the real one. Not changed here, because
+`CLAUDE.md` records the cap as deliberate. Subscribing by visibility is the likely fix, and it is a
+decision for the developer.
+
+## Verification, driven against the running backend
+
+`make seed` then `make dev-all` on :8000. The web dev server on :3000 was pointed at `localhost:8000`
+by env override, because `dev-all` binds the API to localhost while `.env.local` names the LAN IP.
+Bidder A (+27820000002) in the browser, B and C bid through the API with bearer tokens from curl.
+360x480.
+
+| Case | Result |
+|---|---|
+| First render (spring-collectables) | first four Bid buttons enabled, opacity 1, at appearance and at +700ms: **not held** |
+| **The reported symptom** (lot 1, B bids R 99) | A's button `R 99` -> **`R 109`** in 60ms, price and bid count updated, 0 navigations |
+| **The hold** (C bids, A clicks 4ms after the figure changed to R 119) | button `disabled`, opacity `1`, **0 POSTs**; row 181px during the hold |
+| Press after it settles | sent `11900` with the button reading `Bid R 119`, 200, leading |
+| **Deferred counter** (lot 3, B's proxy to R 2 000, C bids R 1 250) | button `R 1 250` -> `R 1 300` at 101ms -> **`R 1 350` at 8110ms** when the counter landed |
+| **Band crossing** (lot 1, global bands +R10 below R 500, +R50 from it) | `R 149` -> **`R 550`** once the price reached R 500. A client adding its own step would have shown R 510 |
+| `/search` (lot 14 by number) | `R 2 550` -> **`R 2 600`** in 27ms, row 198px before and after |
+| Light theme | `R 129` -> `R 139`, opacity 1 |
+| Row height | 181px before the change and during the hold. Later heights (199px, 232px) were the pre-existing "Your auto bid" line and the 6-second in-card notice, not the hold |
+
+`npm run lint`, `npm run typecheck` and `npm run build` clean.
+
+### Test data left behind
+
+Seeded fresh with `make seed` at the start. Spring-collectables lots 1, 3, 13 and 14 carry bids from
+bidders 2, 3 and 4; bidder 3 holds a R 2 000 proxy on lot 3. `make seed` rebuilds.

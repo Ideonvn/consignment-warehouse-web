@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { BidOutcome } from "@/lib/hooks/useBidSubmit";
 import { formatMoney } from "@/lib/format/money";
 import { BidResultPanel, ShortfallPanel } from "@/components/bid/BidOutcomePanels";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
 import { Sheet } from "@/components/ui/Sheet";
+import { useSettledFigure } from "@/lib/hooks/useSettledFigure";
 
 export type OneTapOutcome = {
   outcome: BidOutcome;
@@ -133,20 +133,6 @@ function Body({
   );
 }
 
-/**
- * How long the re-bid button ignores presses after its figure changes.
- *
- * Measured, not guessed: a double tap 191ms apart on a contested lot sent the
- * first press, took a 422 back in 21ms, and the second tap landed on the button
- * already re-armed with the new, higher figure — a bid at an amount shown for
- * ~170ms. The second tap of a double tap arrives inside the platform's
- * double-tap timeout (Android 300ms, iOS ~350ms) of the first, and the figure can
- * only change after it, so 500ms covers it; nobody reads a new amount and
- * deliberately presses in less. It holds on first appearance too, which covers a
- * double tap on the row that opened this sheet.
- */
-const NEW_FIGURE_HOLD_MS = 500;
-
 function TooLowPanel({
   minimum,
   attemptedMinor,
@@ -167,12 +153,9 @@ function TooLowPanel({
   bidAgainOpen: boolean;
   bidAgainBusy: boolean;
 }) {
-  // The figure the button has shown long enough to be pressed on purpose.
-  const [settledMinor, setSettledMinor] = useState<number | null>(null);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettledMinor(minimum), NEW_FIGURE_HOLD_MS);
-    return () => clearTimeout(timer);
-  }, [minimum]);
+  // Held on first appearance too: the sheet has just slid up under a finger that
+  // may still be mid double tap on the row that opened it.
+  const settled = useSettledFigure(minimum, { holdOnMount: true });
 
   return (
     <div className="px-5 pt-2 pb-6">
@@ -201,7 +184,7 @@ function TooLowPanel({
         <Button
           size="lg"
           fullWidth
-          disabled={!bidAgainOpen || settledMinor !== minimum}
+          disabled={!bidAgainOpen || !settled}
           loading={bidAgainBusy}
           onClick={onBidAgain}
           aria-label={`Bid ${formatMoney(minimum, currency)} on lot ${lotNumber}`}

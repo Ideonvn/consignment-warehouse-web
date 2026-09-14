@@ -85,6 +85,8 @@ export function applyServerMessage(
         current_bid_minor: message.amount_minor,
         bid_count: message.bid_count,
         bid_sequence: message.sequence,
+        // The row's Bid button follows the price from this, with no refetch.
+        minimum_next_bid_minor: message.minimum_next_bid_minor,
       });
       const mine = patchMyBid(queryClient, message.lot_id, {
         current_bid_minor: message.amount_minor,
@@ -97,9 +99,11 @@ export function applyServerMessage(
       // alert saying somebody else just bid, which is a lie about their money.
       if (mine) void queryClient.invalidateQueries({ queryKey: ["my-bids"] });
 
-      // The bid event carries no `minimum_next_bid_minor`, and only the server
-      // knows whether this displaced the user — a rival's maximum is invisible
-      // to us. So refetch the lot whenever anyone has it loaded.
+      // **Not redundant, even though the minimum is now patched above.** The
+      // event carries the price and the minimum, but never anyone's maximum, so
+      // whether this bid displaced the user — a rival's hidden maximum taking the
+      // lead back — is still only knowable from the server's `am_i_leading`. That
+      // is what feeds `onOutbid`. So refetch the lot whenever anyone has it loaded.
       if (cached) {
         void queryClient
           .fetchQuery({
@@ -107,7 +111,7 @@ export function applyServerMessage(
             queryFn: () => getLot(message.lot_id),
             // The patch above just marked this entry fresh; without this the
             // fetch would be served from cache and never see `am_i_leading`
-            // flip, or the new minimum next bid.
+            // flip.
             staleTime: 0,
           })
           .then((fresh) => {

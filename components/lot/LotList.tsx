@@ -6,6 +6,7 @@ import { formatDuration, isLotOpen } from "@/lib/format/time";
 import { lotOutcome, type LotOutcome } from "@/lib/format/lotStatus";
 import { useMyBidStatus, type MyBidStatus } from "@/lib/hooks/useMyBidStatus";
 import { useLoadMoreOnScroll } from "@/lib/hooks/useLoadMoreOnScroll";
+import { useSettledFigure } from "@/lib/hooks/useSettledFigure";
 import type { LotActions } from "@/lib/hooks/useLotActions";
 import { useLotNotice, type LotNotice } from "@/lib/realtime/store";
 import { Button } from "@/components/ui/Button";
@@ -353,6 +354,10 @@ export function LotRow({
   const myMax = autoBidMax(lot);
   const canBid = Boolean(actions) && biddingOpen && open;
   const submitting = actions?.isSubmitting(lot.id) ?? false;
+  // The figure follows the price live, so a press must never land on one that
+  // changed under the thumb. Not held on first render: a row that has always
+  // shown its figure is not a change.
+  const figureSettled = useSettledFigure(lot.minimum_next_bid_minor, { holdOnMount: false });
   const notice = freshNotice(useLotNotice(lot.id), now);
   // The bid alert is only meaningful to someone with money on this lot; on a row
   // they have never bid it is noise dressed as urgency.
@@ -474,8 +479,11 @@ export function LotRow({
            * own `minimum_next_bid_minor`, never a figure computed here.
            */}
           <Button
-            className="flex-1"
-            disabled={!canBid}
+            // Held for a moment after the figure changes. Deliberately no
+            // visual state: a dim flash on every rival bid across the list is
+            // noise, and the in-card notice already announces the bid.
+            className={cn("flex-1", canBid && !figureSettled && "disabled:opacity-100")}
+            disabled={!canBid || !figureSettled}
             loading={submitting}
             onClick={() => actions.bidNow(lot, currency)}
             aria-label={`Bid ${formatMoney(lot.minimum_next_bid_minor, currency)} on lot ${lot.lot_number}, ${lot.title}`}

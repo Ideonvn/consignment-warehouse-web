@@ -1,5 +1,6 @@
 "use client";
 
+import { useSettledFigure } from "@/lib/hooks/useSettledFigure";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getLot } from "@/lib/api/endpoints";
@@ -126,7 +127,17 @@ function BidSheetBody({
     return null;
   }, [amountMinor, existingMax, minimum, currency]);
 
-  const canSubmit = amountMinor !== null && validationError === null && !inFlight;
+  // Until they type, the maximum IS the minimum, and the minimum now moves live
+  // with every bid event — so the ceiling they commit could change under their
+  // thumb. The same hold as the row's Bid button applies. Once they have typed,
+  // the maximum is their own number and does not move; `amountMinor: minimum`
+  // below is then simply the freshest server figure, which is correct.
+  const minimumSettled = useSettledFigure(minimum, { holdOnMount: false });
+  const canSubmit =
+    amountMinor !== null &&
+    validationError === null &&
+    !inFlight &&
+    (typed !== null || minimumSettled);
   // What they'd actually pay right now: the visible step, capped by their max.
   const payNow = amountMinor === null ? minimum : Math.min(minimum, amountMinor);
 

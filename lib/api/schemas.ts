@@ -287,6 +287,9 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
     amount_minor: z.number(),
     bidder_handle: z.string(),
     bid_count: z.number(),
+    // Server-owned and price-banded. Required: a missing one must fail here,
+    // loudly, rather than render `undefined` on a Bid button.
+    minimum_next_bid_minor: z.number(),
     is_auto: z.boolean(),
     created_at: z.string(),
   }),
