@@ -34,6 +34,16 @@ export type LotActions = {
   clearOutcome: () => void;
   /** The lot to raise on, once they choose to from the outcome. */
   raiseFromOutcome: () => void;
+  /**
+   * After a too-low refusal: bid the minimum the server's 422 named, on the same
+   * lot, through the same path as the row's button. Never called automatically —
+   * only from a button that shows that figure.
+   */
+  rebid: () => void;
+  /** Whether that lot is still open on the clock, so the sheet can hold its button. */
+  rebidOpen: boolean;
+  /** That re-bid is in flight: the sheet's equivalent of the row's `isSubmitting`. */
+  rebidding: boolean;
   /** Lot ids with a bid in flight, so a row can hold its button still. */
   isSubmitting: (lotId: string) => boolean;
 };
@@ -43,8 +53,12 @@ export type LotActions = {
  *
  * One path to `POST /bids` and one to the sheet, so the row cannot grow a second
  * opinion about what a press means — and that disagreement would be money.
+ *
+ * `lots` is what the screen currently renders. The outcome sheet's re-bid reads
+ * the lot's clock from there rather than from the snapshot taken at the press:
+ * the rival bid that caused a refusal can itself have extended the lot.
  */
-export function useLotActions(): LotActions {
+export function useLotActions(lots: readonly LotSummary[]): LotActions {
   const { showToast } = useToast();
   const { submit } = useBidSubmit();
   const now = useNow();
@@ -56,8 +70,8 @@ export function useLotActions(): LotActions {
   // A double tap must not become two bids even before the first response lands.
   const busy = useRef<Set<string>>(new Set());
 
-  const bidNow = useCallback(
-    (lot: LotSummary, currency: string) => {
+  const place = useCallback(
+    (lot: LotSummary, amountMinor: number, currency: string) => {
       if (busy.current.has(lot.id)) return;
       if (!isLotOpen(lot.status, lot.effective_ends_at, now)) {
         showToast({
@@ -73,16 +87,21 @@ export function useLotActions(): LotActions {
 
       void submit({
         lotId: lot.id,
-        // Server-owned and price-banded, read from the lot. Never computed.
-        amountMinor: lot.minimum_next_bid_minor,
+        // Server-owned and price-banded, read from the lot or from the 422 that
+        // refused the last press. Never computed.
+        amountMinor,
         // No headroom: the backend treats an absent maximum as "the bid is the
         // maximum". A ceiling is what the sheet is for.
         maxAmountMinor: null,
+        // Fresh on every press, re-bids included: a refusal wrote no row, and
+        // the amount is different, so this is a new bid rather than a retry.
         clientRequestId: uuid(),
         isRaise: false,
       })
         .then((next) => {
           if (next.kind === "leading") {
+            // A re-bid from the outcome sheet lands here too; winning closes it.
+            setOutcome(null);
             showToast({
               title: `You're winning lot ${lot.lot_number}`,
               description: "Nothing more to do unless someone outbids you.",
@@ -92,8 +111,16 @@ export function useLotActions(): LotActions {
           }
           // Everything else earns the sheet: being outbid is where raising is
           // offered, and every refusal has something the user has to be told.
+          // Replacing the state updates an open sheet in place — a second
+          // refusal shows the newer minimum on the same button.
           setRaiseLot(lot);
-          setOutcome({ outcome: next, currency, lotNumber: lot.lot_number });
+          setOutcome({
+            outcome: next,
+            currency,
+            lotId: lot.id,
+            lotNumber: lot.lot_number,
+            attemptedMinor: amountMinor,
+          });
         })
         .finally(() => {
           busy.current.delete(lot.id);
@@ -103,7 +130,16 @@ export function useLotActions(): LotActions {
     [submit, showToast, now],
   );
 
+  const bidNow = useCallback(
+    (lot: LotSummary, currency: string) => place(lot, lot.minimum_next_bid_minor, currency),
+    [place],
+  );
+
   const openSheet = useCallback((lot: LotSummary) => setBidLot(lot), []);
+
+  // The lot as the screen holds it now, falling back to the press's snapshot if
+  // it has left the list — which only happens once it has ended.
+  const outcomeLot = raiseLot ? (lots.find((lot) => lot.id === raiseLot.id) ?? raiseLot) : null;
 
   return {
     bidNow,
@@ -114,8 +150,16 @@ export function useLotActions(): LotActions {
     clearOutcome: () => setOutcome(null),
     raiseFromOutcome: () => {
       setOutcome(null);
-      if (raiseLot) setBidLot(raiseLot);
+      if (outcomeLot) setBidLot(outcomeLot);
     },
+    rebid: () => {
+      if (outcomeLot && outcome?.outcome.kind === "too-low") {
+        place(outcomeLot, outcome.outcome.minimumNextBidMinor, outcome.currency);
+      }
+    },
+    rebidOpen:
+      outcomeLot !== null && isLotOpen(outcomeLot.status, outcomeLot.effective_ends_at, now),
+    rebidding: outcome !== null && inFlight.includes(outcome.lotId),
     isSubmitting: (lotId: string) => inFlight.includes(lotId),
   };
 }

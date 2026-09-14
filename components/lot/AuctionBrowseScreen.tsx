@@ -46,7 +46,7 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
 
   const browse = useAuctionBrowse(auctionId);
   const biddingOpen = auction?.status === "live";
-  const actions = useLotActions();
+  const actions = useLotActions(browse.lots);
 
   useLotSubscription(
     browse.lots
@@ -124,6 +124,9 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
         state={actions.outcome}
         onClose={actions.clearOutcome}
         onRaise={actions.raiseFromOutcome}
+        onBidAgain={actions.rebid}
+        bidAgainOpen={actions.rebidOpen}
+        bidAgainBusy={actions.rebidding}
       />
     </div>
   );

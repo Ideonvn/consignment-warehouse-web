@@ -63,7 +63,7 @@ export function SearchScreen() {
   const debounced = useDebounced(term, DEBOUNCE_MS);
 
   const search = useLotSearch(debounced);
-  const actions = useLotActions();
+  const actions = useLotActions(search.lots);
   const now = useNow();
   const { statusFor, truncated } = useMyBidStatus();
   const sentinel = useLoadMoreOnScroll(search.hasMore, search.loadMore);
@@ -251,6 +251,9 @@ export function SearchScreen() {
         state={actions.outcome}
         onClose={actions.clearOutcome}
         onRaise={actions.raiseFromOutcome}
+        onBidAgain={actions.rebid}
+        bidAgainOpen={actions.rebidOpen}
+        bidAgainBusy={actions.rebidding}
       />
     </PhoneColumn>
   );

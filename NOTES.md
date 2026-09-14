@@ -1220,3 +1220,103 @@ lot 2 at +5773ms: (no alert)                                             => ALER
 
 Lot 2's `current_bid_minor` and the rival's bids were restored to the seeded values after each run.
 The search and bid rate-limit counters were cleared with `make reset-limits`.
+
+# "Someone bid first" becomes a button (one-tap re-bid on a 422)
+
+## What changed
+
+- **The words.** The 422 sheet no longer reads as a fault. Title: *"Another bidder got in just
+  before you"*, in ordinary text colour rather than danger red. Body: *"Your bid of R 1 100 was not
+  placed, and nothing was charged. The lowest bid on lot 4 is now R 1 200."* It avoids "outbid"
+  (they were never leading) and puts "nothing was charged" up front instead of burying it.
+- **The dead end.** The sheet's primary button is now **`BID R 1 200`**: same shape and uppercase as
+  the row's button, figure through `Money`, taken from the 422. **Close** is secondary.
+- **One path.** `useLotActions` has one internal `place(lot, amount, currency)`. `bidNow` is
+  `place(lot, lot.minimum_next_bid_minor)` and `rebid` is `place(lot, <422's minimum>)`. The busy
+  guard, clock gate, fresh `client_request_id`, `maxAmountMinor: null` and the claim and release in
+  `useBidSubmit` are therefore shared, not copied. A `leading` result now also clears the outcome,
+  so a winning re-bid closes the sheet and shows the same toast as a row press. Every other result
+  replaces the outcome in place.
+- **The clock comes from the list, not the snapshot.** `useLotActions(lots)` takes the lots the
+  screen renders (the auction list or the search results) and gates the re-bid on that lot's current
+  `effective_ends_at`. The rival bid that caused the refusal can itself extend the lot, so the clock
+  captured at the press can be wrong in exactly the hot-lot case. Measured by accident, see below.
+- **A 500ms hold after the figure changes.** This was not in the brief; see the first judgement call.
+
+## Judgement calls
+
+**The re-bid button ignores presses for 500ms after its figure changes, and on first appearance.**
+Found by driving it, not by reasoning. An ordinary double tap on a contested lot, two raw pointer
+clicks 191ms apart (bidder A, rivals B and C):
+
+```
+tap 1 at    0ms -> POST R 5 250 -> 422 at 21ms, sheet re-arms with R 5 500
+tap 2 at  191ms -> lands on "BID R 5 500"  -> POST R 5 500 -> 200   (a bid at a figure shown ~170ms)
+```
+
+That is the one thing this task must never do: spend money at a figure the person did not see. The
+second tap of a double tap lands within the platform double-tap timeout of the first (Android 300ms,
+iOS about 350ms), and the figure can only change after the first tap's response. So 500ms covers it,
+and nobody reads a new amount and presses on purpose in less time. The same run after the fix:
+
+```
+tap 1 at    0ms -> POST R 13 000 -> 422 at 24ms
+tap 2 at  177ms -> button reads "Bid R 13 250 on lot 6 [disabled]" -> nothing sent
++700ms          -> enabled; one deliberate press -> POST R 13 250 -> 200, sheet closes, toast
+```
+
+It is not the ratio threshold the brief argues against. It applies to every figure change
+regardless of size, and it never turns the press into a different action.
+
+**No threshold on the jump (Task 4). I agree with the lean.** The hazard in the R 1 100 -> R 51 000
+case is not the ratio, it is legibility, and the sheet now says both numbers: the body names the
+refused R 1 100 and the button carries R 51 000. A threshold that sometimes turns the primary button
+into "open the bid sheet" is the unpredictable hidden rule the brief objects to. The real failure
+seen in testing was *timing* (a figure changing under a finger), and the hold addresses that
+uniformly.
+
+**The button shows the 422's figure, not a fresher cached minimum.** If the price moves again while
+the sheet is open, the press is refused again and the sheet updates in place. That costs a round
+trip, not money: a stale figure is always lower than the real minimum, so the server refuses it.
+
+## Verification, driven against the running backend
+
+API and lifecycle worker on :8001 and the web app on :3001, with env overrides only (:8000 and :3000
+were in use by other projects). 360x740. Rivals bid through the API with bearer tokens.
+
+| Case | Result |
+|---|---|
+| Real 422 (B bids R 500 on lot 2, A presses the stale row) | sheet: "Your bid of R 500 was not placed … now R 550", `BID R 550` |
+| **Double refusal** (lot 4: B, A 422, C bids the new minimum, A presses the sheet) | backend `422`, `422`; sheet updated in place to "Your bid of R 5 049 was not placed … now R 5 299", `BID R 5 299`, one dialog |
+| Re-bid lands on `outbid` (lot 2, rival held a higher proxy) | the same sheet switched to the outbid panel with "Raise my maximum" |
+| Re-bid lands on `leading` (lot 6, lot 9) | sheet closed, "You're winning lot N" toast, row behind it WINNING with the next figure |
+| In flight | sheet button `aria-busy="true"` with spinner; the row's button shows the same (shared `inFlight`) |
+| Double press while in flight | one POST (the busy guard) |
+| Lot closes while the sheet is open (lot 8, anti-snipe off) | before: enabled; after the clock: disabled, copy "Lot 8 has now closed."; forced press sent **0** requests |
+| From `/search` (lot 9) | 422 -> sheet `BID R 460` -> press -> 200, toast, the search row WINNING |
+| 403 from a search row | the existing shortfall panel |
+| Light theme (lot 11) | 422 sheet renders; title ink `rgb(22,22,26)` on the light surface |
+
+**The first close attempt passed for the right reason, which is why the clock is read from the list.**
+On lot 7 a rival bid at 01:15 left, inside the 120s anti-snipe window, and extended the lot. The
+script waited for the *original* close, and the button stayed enabled, correctly: the extension had
+reached the list through the socket, and the press was accepted (200). A snapshot clock would have
+disabled a live lot. The genuine close test was re-run on lot 8 with the window set to 0.
+
+**A harness mistake, recorded so the runs above read correctly.** Rivals were first logged in with
+`page.request`, which shares the browser's cookie jar. The OTP verify replaced the browser's refresh
+cookie, so after the next reload the browser was bidder C, not A. The lot 2-5 runs predate that
+(rival tokens from curl, browser A), so the lot-4 double refusal and the lot-5 double-tap repro are
+two different people. On lot 6 and lot 7 the browser was C. On lot 6 the *second* refusal, the one
+the hold was measured on, came from B's real bid. The browser was signed back in as A for search,
+lot 8 and light.
+
+`npm run lint`, `npm run typecheck` and `npm run build` clean after the final change.
+
+### Test data left behind
+
+On `autumn-jewellery-scheduled`, lots 2-11 carry bids from bidders 2, 3 and 4. Lots 7 and 8 had their
+close moved to a few minutes out and the worker has since closed them. The auction's
+`anti_snipe_window_seconds` was set to 0 for the lot-8 run and restored to 120. A temporary
+`VERIFY-TEMP` deposit for bidder 3 was added for the light-theme run and deleted. `make seed` rebuilds
+the dataset.

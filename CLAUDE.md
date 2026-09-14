@@ -128,6 +128,16 @@ thing that can explain one, and all four paths are real and handled: the 403 wit
 rendered exactly as the server gives it, the 409 for a lot that has stopped accepting bids, the 422
 carrying the new minimum, and the 429 with the wait derived from `Retry-After`.
 
+**The 422 is a button, not a dead end — and never an automatic re-bid.** Someone bidding a moment
+earlier is ordinary, so the sheet says so without alarm ("Another bidder got in just before you"),
+states that nothing was placed or charged, and offers **`BID R1 200`** as its primary button, carrying
+the minimum from that 422. Pressing it goes through `useLotActions`' one `place` path — busy guard,
+clock gate against the lot as the screen now holds it, fresh `client_request_id`, own-bid claim — so
+a re-bid can land on any outcome, and a second 422 updates the same button in place. It is never
+placed for them: the new minimum can be far above what they pressed, and **there is no bid
+retraction API**, so the figure must be on the button before the press. There is no threshold — a
+hidden rule that sometimes changes what the button does is less predictable than one that never does.
+
 **Money is an integer number of minor units everywhere.** Never float arithmetic. The divide by 100
 happens once, at render, in `components/ui/Money.tsx` — the only place money becomes text. Text that
 is not rendered as an element (an `aria-label`, say) goes through `formatMoney`, which is what
