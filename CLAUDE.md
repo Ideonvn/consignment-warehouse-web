@@ -270,6 +270,44 @@ subsequent bid that suffers — the `bid` branch notes the sequence unconditiona
 repairs the position on its own. That is why a quiet lot on a flapping connection is the worst case,
 not a busy one. Replayed duplicates are dropped by sequence as a safety net; keep it.
 
+**Live rows are the rows on screen.** `useOnScreenLots` watches each row with an
+`IntersectionObserver` (the platform API the paging sentinel already uses) and both the auction list
+and search subscribe exactly those lots. It replaced `lots.slice(0, 12)`, whose comment said "what's
+on screen plus a little ahead" while it subscribed the first twelve loaded — so from row 13 down no
+event ever arrived, which the live Bid button made visible. The rules that make it hold:
+
+- **Unsubscribe on scroll past; never accumulate.** The server was built for a changing handful of
+  lots, and this keeps a screen near 10–20 against the 200 ceiling.
+- **The margin is one viewport either side** (`rootMargin: "100% 0px"`) — scale-free, and a row is
+  live a screen before it arrives. **Changes wait `SETTLE_MS` (250ms) of stillness**, because the
+  socket's 120-per-minute limit is a fixed window that silently refuses the excess.
+- **`useLotSubscription` retains and releases only the difference.** Releasing the whole set and
+  retaining the new one would unsubscribe and resubscribe every row that stayed on screen.
+- **A wanted lot is never given up on.** A subscribe refused at the ceiling or over the rate limit
+  leaves a row that looks live and is not, so `RealtimeClient` re-asks when a release frees room or
+  the limit's window has passed, and unsubscribes a confirmation for a lot released mid-flight.
+- **A known sequence of 0 is a resume point and is sent.** A lot loaded with no bids and subscribed
+  later must replay what arrived in between; omitting its entry asks for no replay, and the row
+  keeps a price that is already gone. Only an *unknown* sequence is omitted. Search keeps one
+  difference on purpose: closed results are never subscribed.
+
+**Being outbid reaches you on any screen.** The on-screen rule releases a lot when its row leaves,
+so a bidder who bid and navigated away used to hear nothing. `OutbidWatch`, mounted app-wide in
+`AppShell` beside `WinCelebration`, keeps a second, small set subscribed: **the open lots the user has
+a `/me/bids` row for** (open on the clock, never `status`). It is a union, not an override — the socket
+client reference-counts, so a lot wanted by both is one subscription. At the 200 ceiling **the screen
+wins**: the stake set takes at most `MAX_LOTS − 40`, soonest-closing first, because the screen is what
+the user is watching and a stake lot still has the durable email/SMS.
+
+It announces **a lead lost, which is the server's to say**: a `/me/bids` row that was `am_i_leading`
+and no longer is, after the refresh a bid event already triggers. Never inferred from an event, and
+never on first load. One neutral toast — "Someone bid higher on lot 14", the price, "Go to lot 14" —
+and a second loss while it is up replaces it with "…on 3 of your lots" and "See my bids". **Not when
+the row is already shown** (a `data-lot-id` row inside the viewport, or that lot's detail page), where
+the card or the page says it. This replaced lot detail's `onOutbid` toast, which fired only when that
+lot's detail happened to be cached and would otherwise announce the same loss twice. Not a
+notification centre, not push: one transient message with one tap target.
+
 **Full-height layouts use `dvh` — never `vh`, and never a percentage height against `<html>`.**
 Both of those resolve against the *large* viewport, the one that assumes the mobile URL bar has
 collapsed — a viewport the user may never actually have. `min-h-dvh` on `<body>` is the baseline and
@@ -333,7 +371,9 @@ than softer: the number on the button is the number that gets sent.
 **The figure is server-owned *and live*: every `bid` event carries `minimum_next_bid_minor`**, and
 `patchLot` writes it into every `["lots"]` entry, so the row's button (list and search alike) follows
 the price with no refetch. Keep the lot refetch in `events.ts` anyway — the event never carries a
-rival's maximum, so only the server's `am_i_leading` can say the user was displaced. **A live figure
+rival's maximum, so only the server's `am_i_leading` can say the user was displaced, and lot detail
+renders it from that entry. That refetch no longer *announces* anything; see "Being outbid reaches
+you on any screen". **A live figure
 needs a hold**: `useSettledFigure` disables a bid button for `NEW_FIGURE_HOLD_MS` (500ms, measured —
 see NOTES.md) after its figure changes, so a press cannot commit at an amount that changed under a
 travelling thumb. Not on first render, and with no visual change on the row: a dim flash on every
@@ -508,9 +548,9 @@ uses `isLotOpen`; the auction-level one is the auction's own status.
 The backend does not itself produce that state — `end_finished_auctions` marks an auction ended only
 once its last lot has, and cancelling an auction cancels its still-open lots — so the data came from
 a previous session's manual SQL. The client can still reach it on clean data through cache skew: the
-auction and lots queries refresh independently, and only the first `SUBSCRIBE_AHEAD` lots receive
-`lot_closed` over the socket, so a fresh `ended` auction beside a stale page of `live` lots is an
-ordinary few seconds, not a corruption. The guard is correct either way.
+auction and lots queries refresh independently, and only the lots on screen receive `lot_closed`
+over the socket, so a fresh `ended` auction beside a stale page of `live` lots is an ordinary few
+seconds, not a corruption. The guard is correct either way.
 
 **The count lives on that line and nowhere else.** The list used to print its own
 `{lots.length} lots`; with the auction's own total above it, the two disagreed while paging.
@@ -617,9 +657,10 @@ optional props instead.
 - **The term is in the key**, so React Query drops the results of a term the user has typed past.
   The input is debounced 300ms on top of that: a ten-character term costs three or four requests
   against a 60/min ceiling.
-- **Only biddable results are subscribed, and only the first 12.** A closed lot's price cannot move.
-  The socket caps a connection at 200 lots; 12 is what the auction screen holds, so paging deep
-  through search never approaches it.
+- **Only biddable results on screen are subscribed.** The same on-screen rule as the auction list
+  (see "Live rows are the rows on screen"), plus one deliberate difference: a closed lot's price
+  cannot move, so it takes no socket slot. A deep walk through search holds a screenful of lots,
+  never the result set.
 
 **The search query has no retry rule of its own, because the app-wide one now covers it.** It used
 to carry a local predicate for 429/422; that reasoning lives in `providers.tsx` — see "One retry

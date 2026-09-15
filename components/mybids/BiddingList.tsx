@@ -125,7 +125,7 @@ export function BiddingList() {
               </h2>
               <ul className="flex flex-col gap-3">
                 {group.rows.map((row) => (
-                  <li key={row.lot_id}>
+                  <li key={row.lot_id} data-lot-id={row.lot_id}>
                     <BidRow
                       row={row}
                       currency={currencyFor(row.auction_id)}

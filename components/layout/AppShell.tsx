@@ -6,6 +6,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { GetStartedBar } from "@/components/public/GetStartedBar";
 import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
+import { OutbidWatch } from "@/components/realtime/OutbidWatch";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { WinCelebration } from "@/components/win/WinCelebration";
 
@@ -32,6 +33,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/* App-wide: a win must land wherever the user happens to be, and on
             next open for anything that closed while they were away. */}
         {signedIn ? <WinCelebration /> : null}
+        {/* App-wide for the same reason: losing a lead must reach the user on
+            whichever screen they are, not only on the one showing that lot. */}
+        {signedIn ? <OutbidWatch /> : null}
       </RealtimeProvider>
     </AuthGuard>
   );

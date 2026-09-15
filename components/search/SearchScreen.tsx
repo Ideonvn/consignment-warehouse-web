@@ -8,6 +8,7 @@ import { MIN_TERM_LENGTH, SearchCursorError, isSearchable, useLotSearch } from "
 import { useLoadMoreOnScroll } from "@/lib/hooks/useLoadMoreOnScroll";
 import { useLotActions } from "@/lib/hooks/useLotActions";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
+import { useOnScreenLots } from "@/lib/hooks/useOnScreenLots";
 import { useMyBidStatus } from "@/lib/hooks/useMyBidStatus";
 import { useNow } from "@/lib/hooks/useTicker";
 import { BidSheet } from "@/components/bid/BidSheet";
@@ -23,16 +24,6 @@ import { Skeleton } from "@/components/ui/Skeleton";
 
 /** Three or four requests for a ten-character term, against a 60/min ceiling. */
 const DEBOUNCE_MS = 300;
-
-/**
- * How many biddable results stay subscribed.
- *
- * The socket caps a connection at 200 lots and search pages 20 at a time, so a
- * deep walk could get close on its own. It doesn't, because only the top of the
- * list is subscribed — the same number the auction screen holds, and for the
- * same reason: a row nobody is looking at does not need a live price.
- */
-const SUBSCRIBE_AHEAD = 12;
 
 /** Waits for typing to stop. The term is the query key, so React Query drops what it types past. */
 function useDebounced(value: string, ms: number): string {
@@ -74,16 +65,19 @@ export function SearchScreen() {
   const busy = settling || search.isPending;
 
   /**
-   * Only rows still taking bids are subscribed. A closed lot's price cannot
-   * move, and a row that cannot move does not need a socket slot.
+   * The same rule as the auction list — the rows on screen, plus a viewport
+   * either side — with one difference, on purpose: only rows still taking bids.
+   * A closed lot's price cannot move, and a row that cannot move does not need
+   * a socket slot. A deep walk through search therefore holds a screenful of
+   * lots, never the whole result set.
    */
+  const { onScreen, watchRow } = useOnScreenLots();
   const live = useMemo(
     () =>
       search.lots
-        .filter((lot) => isLotOpen(lot.status, lot.effective_ends_at, now))
-        .slice(0, SUBSCRIBE_AHEAD)
+        .filter((lot) => onScreen.has(lot.id) && isLotOpen(lot.status, lot.effective_ends_at, now))
         .map((lot) => ({ id: lot.id, sequence: lot.bid_sequence })),
-    [search.lots, now],
+    [search.lots, onScreen, now],
   );
   useLotSubscription(live);
 
@@ -193,7 +187,7 @@ export function SearchScreen() {
                 // this screen refuses to read on a closed lot.
                 const mine = statusFor(lot.id);
                 return (
-                  <li key={lot.id}>
+                  <li key={lot.id} ref={watchRow} data-lot-id={lot.id}>
                     <LotRow
                       lot={lot}
                       /* Every row carries its own currency. ZAR is the only one

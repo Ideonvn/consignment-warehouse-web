@@ -14,6 +14,15 @@ const LIMIT = 200;
 export type MyBidStatus = "leading" | "outbid" | "none" | "unknown";
 
 /**
+ * The one `/me/bids` read the list joins against and the app-wide outbid watch
+ * compares — the same cache entry, so a refresh either triggers serves both.
+ */
+export const myBidsQuery = {
+  queryKey: [...queryKeys.myBids(false), LIMIT] as const,
+  queryFn: () => listMyBids({ active_only: false, limit: LIMIT }),
+};
+
+/**
  * Whether the user is winning a lot, for layouts that show many lots at once.
  *
  * `LotCardOut` carries no `am_i_leading` — only the detail payload and `/me/bids`
@@ -33,8 +42,7 @@ export function useMyBidStatus(enabled = true): {
   truncated: boolean;
 } {
   const { data } = useQuery({
-    queryKey: [...queryKeys.myBids(false), LIMIT] as const,
-    queryFn: () => listMyBids({ active_only: false, limit: LIMIT }),
+    ...myBidsQuery,
     // An anonymous visitor has no bids and no token to ask with.
     enabled,
   });

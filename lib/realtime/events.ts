@@ -8,8 +8,6 @@ import { realtime } from "@/lib/realtime/socket";
 import type { LotCard, LotDetail, ServerMessage } from "@/types/api";
 
 export type EventEffects = {
-  /** The user was leading this lot and no longer is. */
-  onOutbid: (lot: LotDetail) => void;
   onExtended: (lotId: string, endsAt: string) => void;
 };
 
@@ -101,9 +99,10 @@ export function applyServerMessage(
 
       // **Not redundant, even though the minimum is now patched above.** The
       // event carries the price and the minimum, but never anyone's maximum, so
-      // whether this bid displaced the user — a rival's hidden maximum taking the
-      // lead back — is still only knowable from the server's `am_i_leading`. That
-      // is what feeds `onOutbid`. So refetch the lot whenever anyone has it loaded.
+      // whether this bid displaced the user is only knowable from the server's
+      // `am_i_leading` — which lot detail renders from this entry. It no longer
+      // announces anything: being outbid is announced once, app-wide, by
+      // `OutbidWatch` off the `/me/bids` refresh above.
       if (cached) {
         void queryClient
           .fetchQuery({
@@ -113,9 +112,6 @@ export function applyServerMessage(
             // fetch would be served from cache and never see `am_i_leading`
             // flip.
             staleTime: 0,
-          })
-          .then((fresh) => {
-            if (cached.am_i_leading && !fresh.am_i_leading) effects.onOutbid(fresh);
           })
           .catch(() => undefined);
 

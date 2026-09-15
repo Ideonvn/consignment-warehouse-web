@@ -10,7 +10,13 @@ const TICKET_REJECTED = 4401;
 /** The server pings every 30s and drops idle connections at 120s. */
 const IDLE_TIMEOUT_MS = 120_000;
 const MAX_BACKOFF_MS = 30_000;
-const MAX_LOTS = 200;
+export const MAX_LOTS = 200;
+/**
+ * The server's inbound limit is a fixed 60s window, and a refused message still
+ * counts against it — so a retry inside the window is refused too. Waiting a full
+ * window is the only wait guaranteed to land in a fresh one.
+ */
+const RATE_WINDOW_MS = 60_000;
 
 type Listener = (message: ServerMessage) => void;
 
@@ -30,6 +36,7 @@ class RealtimeClient {
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
   private connecting = false;
   /** The lot ids of the most recent subscribe, for recovering a rejected resume. */
@@ -82,7 +89,26 @@ class RealtimeClient {
         this.wanted.set(lotId, count - 1);
       }
     }
-    if (removed.length > 0) this.send({ action: "unsubscribe", lot_ids: removed });
+    if (removed.length > 0) {
+      this.send({ action: "unsubscribe", lot_ids: removed });
+      // Room just freed: anything still waiting for a slot gets it now.
+      this.subscribeWaiting();
+    }
+  }
+
+  /**
+   * Subscribes every lot a screen wants that the server has not confirmed.
+   *
+   * A subscribe can be refused without the lot ever being subscribed — at the
+   * per-connection ceiling, or over the message limit — and a row for that lot
+   * would *look* live and not be. So nothing wanted is ever given up on: it is
+   * asked for again when room frees or the limit's window has passed. A repeat
+   * of an in-flight subscribe is harmless; the server accepts it as a no-op and
+   * any replayed bid is dropped by sequence.
+   */
+  private subscribeWaiting(): void {
+    const waiting = [...this.wanted.keys()].filter((lotId) => !this.confirmed.has(lotId));
+    if (waiting.length > 0) this.sendSubscribe(waiting);
   }
 
   /** Ask the server to replay everything after our last known sequence. */
@@ -100,6 +126,13 @@ class RealtimeClient {
   private sendSubscribe(lotIds: string[]): void {
     const room = MAX_LOTS - this.confirmed.size;
     const batch = lotIds.slice(0, Math.max(0, room));
+    if (batch.length < lotIds.length) {
+      // Not dropped: these stay wanted and `subscribeWaiting` asks again once a
+      // release frees room.
+      console.warn("Realtime lot ceiling reached; waiting for room", {
+        waiting: lotIds.length - batch.length,
+      });
+    }
     if (batch.length === 0) return;
 
     const { lastSequence } = useRealtimeStore.getState();
@@ -107,8 +140,11 @@ class RealtimeClient {
     // scalar `after_sequence` could only ever be one compromise for the batch.
     const afterSequences: Record<string, number> = {};
     for (const lotId of batch) {
-      const sequence = lastSequence[lotId] ?? 0;
-      if (sequence > 0) afterSequences[lotId] = sequence;
+      // 0 included. A lot loaded with no bids and subscribed later — scrolled to,
+      // say — must replay whatever arrived in between; omitting its entry asks for
+      // no replay at all, and the row would sit on a price that is already gone.
+      const sequence = lastSequence[lotId];
+      if (sequence !== undefined) afterSequences[lotId] = sequence;
     }
 
     this.lastBatch = batch;
@@ -165,6 +201,10 @@ class RealtimeClient {
       useRealtimeStore.getState().setStatus("live");
       this.confirmed.clear();
       this.armIdleTimer();
+      if (this.retryTimer) {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
+      }
       const lotIds = [...this.wanted.keys()];
       if (lotIds.length > 0) this.sendSubscribe(lotIds);
     };
@@ -216,8 +256,24 @@ class RealtimeClient {
       return;
     }
 
+    if (message.type === "error" && message.code === "rate_limited") {
+      // The refused message was not processed. Only a subscribe matters — a lost
+      // unsubscribe just means a few extra events for a lot no screen shows.
+      this.retryTimer ??= setTimeout(() => {
+        this.retryTimer = null;
+        this.subscribeWaiting();
+      }, RATE_WINDOW_MS);
+    }
+
     if (message.type === "subscribed") {
-      for (const lotId of message.lot_ids) this.confirmed.add(lotId);
+      const unwanted: string[] = [];
+      for (const lotId of message.lot_ids) {
+        // Released while its subscribe was in flight. Counting it as confirmed
+        // would hold a slot for a lot nothing shows, never to be released.
+        if (this.wanted.has(lotId)) this.confirmed.add(lotId);
+        else unwanted.push(lotId);
+      }
+      if (unwanted.length > 0) this.send({ action: "unsubscribe", lot_ids: unwanted });
     } else if (message.type === "unsubscribed") {
       for (const lotId of message.lot_ids) this.confirmed.delete(lotId);
     }
@@ -261,6 +317,10 @@ class RealtimeClient {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
     }
   }
 }

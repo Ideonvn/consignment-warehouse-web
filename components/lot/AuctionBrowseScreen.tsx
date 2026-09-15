@@ -8,6 +8,7 @@ import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import { useAuctionBrowse } from "@/lib/hooks/useAuctionBrowse";
 import { useLotActions } from "@/lib/hooks/useLotActions";
 import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
+import { useOnScreenLots } from "@/lib/hooks/useOnScreenLots";
 import { LotList } from "@/components/lot/LotList";
 import { AuctionCloseBar } from "@/components/auction/AuctionCloseBar";
 import { AuctionInfoSheet } from "@/components/auction/AuctionInfoSheet";
@@ -17,9 +18,6 @@ import { Countdown } from "@/components/ui/Countdown";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
-
-/** Lots kept subscribed: what's on screen plus a little ahead of it. */
-const SUBSCRIBE_AHEAD = 12;
 
 /**
  * One auction, browsed as a list.
@@ -48,9 +46,13 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
   const biddingOpen = auction?.status === "live";
   const actions = useLotActions(browse.lots);
 
+  // The rows on screen, plus a viewport either side — not the first N loaded,
+  // which left everything below them without a live price. A row scrolled away
+  // is unsubscribed, and resumes from its own sequence when it comes back.
+  const { onScreen, watchRow } = useOnScreenLots();
   useLotSubscription(
     browse.lots
-      .slice(0, SUBSCRIBE_AHEAD)
+      .filter((lot) => onScreen.has(lot.id))
       .map((lot) => ({ id: lot.id, sequence: lot.bid_sequence })),
   );
 
@@ -95,6 +97,7 @@ export function AuctionBrowseScreen({ auctionId }: { auctionId: string }) {
 
       {auction ? (
         <LotList
+          watchRow={watchRow}
           lots={browse.lots}
           actions={actions}
           currency={auction.currency_code}

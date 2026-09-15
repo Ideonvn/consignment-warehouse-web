@@ -71,8 +71,10 @@ export const useRealtimeStore = create<RealtimeState>((set) => ({
   setStatus: (status) => set({ status }),
   noteSequence: (lotId, sequence) =>
     set((state) => {
-      const current = state.lastSequence[lotId] ?? 0;
-      if (sequence <= current) return state;
+      // A first 0 is recorded, not ignored: "this lot has no bids yet" is a
+      // resume point, and without it a lot subscribed later replays nothing.
+      const current = state.lastSequence[lotId];
+      if (current !== undefined && sequence <= current) return state;
       return { lastSequence: { ...state.lastSequence, [lotId]: sequence } };
     }),
   pulse: (lotId) =>

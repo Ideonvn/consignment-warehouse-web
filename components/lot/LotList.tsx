@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { RefCallback } from "react";
 import { useNow } from "@/lib/hooks/useTicker";
 import { formatDuration, isLotOpen } from "@/lib/format/time";
 import { lotOutcome, type LotOutcome } from "@/lib/format/lotStatus";
@@ -42,6 +43,7 @@ export function LotList({
   isFetchingMore,
   hasMore,
   loadMore,
+  watchRow,
 }: {
   lots: LotSummary[];
   /**
@@ -56,6 +58,8 @@ export function LotList({
   isFetchingMore: boolean;
   hasMore: boolean;
   loadMore: () => void;
+  /** Reports each row's visibility, so the screen can subscribe what is on screen. */
+  watchRow?: RefCallback<HTMLElement>;
 }) {
   const { statusFor, truncated } = useMyBidStatus(Boolean(actions));
   const sentinel = useLoadMoreOnScroll(hasMore, loadMore);
@@ -104,7 +108,7 @@ export function LotList({
           const open = isLotOpen(lot.status, lot.effective_ends_at, now);
           const mine = statusFor(lot.id);
           return (
-            <li key={lot.id}>
+            <li key={lot.id} ref={watchRow} data-lot-id={lot.id}>
               <LotRow
                 lot={lot}
                 currency={currency}

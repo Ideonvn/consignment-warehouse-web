@@ -1389,3 +1389,162 @@ Bidder A (+27820000002) in the browser, B and C bid through the API with bearer 
 
 Seeded fresh with `make seed` at the start. Spring-collectables lots 1, 3, 13 and 14 carry bids from
 bidders 2, 3 and 4; bidder 3 holds a R 2 000 proxy on lot 3. `make seed` rebuilds.
+
+# Subscribe the lots on screen, not the first twelve
+
+Resolves "rows beyond the first 12 do not follow the price" from the previous round.
+
+## What changed
+
+- **`useOnScreenLots`** (`lib/hooks/useOnScreenLots.ts`): one `IntersectionObserver` over the rows,
+  the same platform API `useLoadMoreOnScroll` uses for the paging sentinel. Each row's `<li>` takes
+  `ref={watchRow}` and `data-lot-id`. `AuctionBrowseScreen` passes it through `LotList`'s new optional
+  `watchRow`; `SearchScreen` puts it on its own rows. Both `SUBSCRIBE_AHEAD` constants, and the comment
+  that described intent the code never had, are gone.
+- **`useLotSubscription` retains and releases the difference only.** It used to release the whole
+  set and retain the new one on any change, which is harmless for a fixed slice and ruinous for a set
+  that moves with the scroll: every row that stayed on screen would be unsubscribed, resubscribed and
+  replayed, on every change.
+- **`RealtimeClient` no longer gives up on a wanted lot.** Previously `sendSubscribe` cut a batch at
+  the 200 ceiling and never asked again, and `rate_limited` / `subscription_limit` were ignored, so a
+  refused subscribe left a row that looked live and was not. Now it re-asks via `subscribeWaiting()`
+  when a release frees room, and once a full 60s window after `rate_limited`. The backend's limiter is
+  a fixed 60s window in which refused messages still count, so any shorter retry is refused too. A
+  `subscribed` confirmation for a lot released mid-flight is answered with an unsubscribe instead of
+  holding a slot forever. A truncated batch logs a warning.
+- **A known sequence of 0 is now sent as a resume point.** Found by driving it, below.
+
+## The three decisions
+
+1. **Unsubscribe on scroll past, never accumulate.** It is what the server's design anticipates, and
+   it keeps these screens near 10–20 lots, so neither screen approaches 200. At the ceiling nothing is
+   dropped: the lot stays wanted and is subscribed the moment a release frees room. The frames below
+   show the boundary: rows scrolled past are unsubscribed, and a bid on one while it is away sends
+   nothing to this client.
+2. **Margin: one viewport above and below** (`rootMargin: "100% 0px"`). A percentage scales from a
+   phone to a desktop, and at a reading pace a row is live a full screen before it arrives. At 360x480
+   that is about 5–8 rows. **Changes settle for 250ms** before subscriptions follow, because the
+   socket accepts 120 messages a minute and a fling must not send a subscribe and an unsubscribe per
+   row. The first set is reported immediately, so a page load is not delayed. The whole run below sent
+   12 subscription messages.
+3. **One rule, one hook.** Search keeps exactly one difference and now states it at the call site:
+   closed results are never subscribed, because their price cannot move.
+
+## Found while verifying: a lot loaded with no bids never replayed what it missed
+
+`sendSubscribe` only included `after_sequences` entries above 0, and `noteSequence` ignored a first
+0. With the first twelve subscribed at page load that window was milliseconds. With scroll-driven
+subscription it is ordinary. Lot 27 loaded on page 2 with no bids, took a bid while off screen, was
+then subscribed with **no** resume entry, received no replay, and kept showing `BID R 8 000` for a
+price that had moved. 0 is a real position ("no bids yet"), and the backend's `_clean_after_sequences`
+accepts it. The store now records a first 0, `useLotSubscription` keeps an *unknown* sequence distinct
+from 0, and the socket sends every known sequence. An unknown sequence, such as lot detail before its
+lot loads, still sends no entry.
+
+## Verification, driven against the running backend
+
+`make seed`, `make dev-all`, web on :3000 pointed at localhost:8000. Bidder A in the browser at
+360x480. B and C bid through the API. Every websocket frame was logged.
+
+| Case | Frames and result |
+|---|---|
+| Page load | `subscribe [1,2,3,4,5] after_sequences={1:0,2:1,3:0,4:0,5:0}` |
+| Scroll to lot 20 | `unsubscribe [1..5]`, `subscribe [16..23] after_sequences={16:4,17:3,18:3,19:5,20:6,21:0,22:0,23:0}`: per lot, never scalar |
+| **Row 20, the motivating case** (B bids) | `bid lot 20 seq 6` -> button `R 2 750` -> `R 2 800` in 91ms, price moved, notice "Another bidder just bid R 2 750" |
+| **Away and back** (lot 20; C then B bid while it is off screen) | while away: **no frames**; back: `subscribe … 20:6` -> replayed `seq 7`, `seq 8` -> button `R 2 850` (the latest) |
+| **Zero-sequence** (lot 26, loaded with no bids, C bids while away) | while away: no frames; on arrival `after_sequences={…26:0…}` -> replayed `seq 1` -> `R 2 500` -> `R 2 550` |
+| Live on lot 27 (below the first page) | `bid lot 27 seq 2, 3` -> `R 8 250` -> `R 8 500` |
+| `/search`, 13th result | subscribed on scroll; C's bid arrived -> `R 900` -> `R 925` |
+| Totals | 12 subscription messages sent, **0 errors** (no `rate_limited`, no `subscription_limit`), 0 scalar resumes |
+| Row height | lot 1 **181px** |
+
+The first run, before the zero-sequence fix, is what exposed it. Its "while away" bids also came from
+the incumbent, which only raises their maximum and emits no event, so the replay was re-run with a
+second bidder.
+
+`npm run lint`, `npm run typecheck` and `npm run build` clean.
+
+**Behaviour to know:** a replayed bid raises the in-card notice when the row returns, because the
+event genuinely happened. It arrives late, not falsely.
+
+### Test data left behind
+
+Seeded fresh at the start. Spring-collectables lots 20, 26 and 27 and one Midweek Closing Sale lot 13
+carry bids from bidders 3 and 4. `make seed` rebuilds.
+
+# Being outbid reaches you on any screen
+
+Reported in live testing: a bidder bid, went back to the auctions page, was outbid from another
+device, and nothing told them. It follows from the on-screen subscription: leaving the auction released
+the lot, so the event had nowhere to land. Before that change the first twelve stayed subscribed, which
+hid this for twelve lots and never worked for the rest.
+
+## What changed
+
+- **`OutbidWatch`** (`components/realtime/OutbidWatch.tsx`), mounted app-wide in `AppShell` beside
+  `WinCelebration` for signed-in users. Two jobs:
+  1. **Subscribe the open lots the user has a `/me/bids` row for**, open on the clock (`isLotOpen`),
+     through the same `useLotSubscription`. The socket client's `wanted` map is a reference count
+     (confirmed by reading `retain`/`release`), so a lot wanted by a screen *and* by this is one
+     subscription, and releasing either interest leaves the other. No change to that layer.
+  2. **Announce a lead lost**: a row that was `am_i_leading` and no longer is, compared across
+     `/me/bids` refreshes. The refresh is the one `events.ts` already does on a bid event for a lot we
+     hold a row for, now reachable because the lot stays subscribed. Nothing is inferred from an event,
+     and the first load is a baseline, not news.
+- **`myBidsQuery`** exported from `useMyBidStatus.ts`: the watch and the list read the same cache entry
+  instead of two copies of the key.
+- **`MAX_LOTS`** exported from `socket.ts` for the ceiling below.
+- **My bids rows carry `data-lot-id`**, so a row visible there counts as shown.
+
+## Decisions
+
+- **Ceiling: the screen wins.** The stake set takes at most `MAX_LOTS − 40` (160), soonest-closing
+  first. What the user is looking at must be live, and a stake lot still has the durable email/SMS
+  behind it. 40 covers a tall desktop viewport plus its one-viewport margin either side. It is now a
+  decision, not whichever `retain` happened to go out first.
+- **No double-announce.** At the moment of announcing, the watch checks whether that lot is already
+  shown: its own `/lots/{id}` page, or a `[data-lot-id]` row actually inside the viewport. The margin
+  is not counted: a row a screen away is not being seen.
+- **Stacking: one toast.** A second lost lead while the toast is up replaces it with "Someone bid higher
+  on 2 of your lots · Lots 3 and 4 · See my bids". A contested close can outbid someone on several lots
+  in a minute, and one summary beats a column of toasts.
+- **Wording is plain, and the tone neutral, not danger.** "Someone bid higher on lot 14 · Box is now
+  R 1 350 · Go to lot 14". A proxy counter landing 5–10s after a bid is the designed behaviour, so this
+  is routine.
+
+## One conflict with `CLAUDE.md`, resolved and flagged
+
+`CLAUDE.md` said the lot refetch in `events.ts` feeds `effects.onOutbid`, which `RealtimeProvider`
+turned into a red "You've been outbid" toast. That toast fired only when the lot's *detail* query
+happened to be cached and the lot was still subscribed, and it would have announced the same loss a
+second time beside the new one. It is removed: `EventEffects.onOutbid` and its handler are gone. The
+refetch stays, because lot detail renders `am_i_leading` from that entry, and its comment and the
+`CLAUDE.md` paragraph now say so. Being outbid is announced in exactly one place.
+
+## Verification, driven against the running backend
+
+Your own `make dev-all` (API and worker) and `next dev` on :3000, pointed at the LAN address. The
+browser opened the app at `http://192.168.1.184:3000`: from `localhost:3000` the refresh cookie on the
+API's LAN origin is cross-site, so every full page load signed the user out. That is a local-setup
+quirk, not an app finding. Bidder A in the browser at 360x480; B and C through the API.
+
+| Case | Result |
+|---|---|
+| **The reported case**: A bids lot 1 from the row, taps Auctions, C outbids | on `/` only the 3 on-screen lots were unsubscribed and lot 1 stayed; toast **160ms** after C's bid: "Someone bid higher on lot 1 · Spring Collectables lot 1 is now R 109 · Go to lot 1"; the tap opened `/lots/…` |
+| **Row on screen**: A re-bids lot 1, stays on the list, C outbids | card: `OUTBID` and "Another bidder just bid R 129"; **no toast** |
+| **Stacking** on `/profile`: A leads lots 3 and 4; B takes 3, C takes 4 | first "…on lot 3"; then **one** toast "Someone bid higher on 2 of your lots · Lots 3 and 4 · See my bids"; the tap opened `/my-bids` |
+| **Deferred counter** on `/search`: B holds a R 8 000 proxy on lot 5; A bids R 5 250 (leading), goes to `/search` at 6.0s | toast on `/search` at **8.5s** after A's bid: "…lot 5 … now R 5 500" |
+| **Closed lot** | `/me/bids` 8 rows: 7 open, all subscribed; 1 closed, **never** subscribed |
+| Light theme | same toast on `/profile`, opaque and legible; dark likewise |
+| Socket errors | none |
+
+**Durable channel, checked rather than assumed:** bidder A's `notifications` show an `outbid` SMS
+`sent` (console provider, 1 attempt, no error) for every loss above: lots 1, 1, 3, 4, 5, 3. A has no
+verified email, so SMS is the correct channel. No backend finding.
+
+`npm run lint`, `npm run typecheck` and `npm run build` clean.
+
+### Test data left behind
+
+Spring-collectables lots 1, 3, 4 and 5 carry bids from bidders 2, 3 and 4; bidder 3 holds an R 8 000
+proxy on lot 5. `make seed` rebuilds.
