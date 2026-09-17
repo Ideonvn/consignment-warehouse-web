@@ -1548,3 +1548,54 @@ verified email, so SMS is the correct channel. No backend finding.
 
 Spring-collectables lots 1, 3, 4 and 5 carry bids from bidders 2, 3 and 4; bidder 3 holds an R 8 000
 proxy on lot 5. `make seed` rebuilds.
+
+## App-link association files
+
+`app/.well-known/apple-app-site-association/route.ts` and
+`app/.well-known/assetlinks.json/route.ts` exist so the mobile app can claim `/lots/*` and
+`/auctions/*` as Universal Links (iOS) and App Links (Android). **The Apple file is filled in; the
+Android one still carries a placeholder and does nothing until it is replaced.** A wrong team id or
+fingerprint fails *silently* — the link simply opens the browser, with nothing logged anywhere —
+which is far worse to diagnose than a file that obviously says `ANDROID_SHA256_CERT_FINGERPRINT`.
+
+The app id is `com.irithmetic.consignmentwarehouse` on both platforms.
+
+### The Apple Team ID — done, and not a constant
+
+`CFZK4RA928`, from the owner's Apple Developer account → Membership details, so the app id reads
+`CFZK4RA928.com.irithmetic.consignmentwarehouse` in both `appIDs` and `appID`.
+
+**It is an individual enrolment, not Irithmetic Consulting.** A company account is a *different*
+Team ID: if the app ever moves to one, `app/.well-known/apple-app-site-association/route.ts` has to
+be refilled and the site redeployed, and universal links stay broken in between with no error
+anywhere. Anyone reading that value should treat it as refillable, not fixed.
+
+### Still outstanding: the Android fingerprint, after the first Play upload
+
+| Placeholder | Where it comes from |
+|---|---|
+| `ANDROID_SHA256_CERT_FINGERPRINT` | The SHA-256 fingerprint of the certificate that signs **the build Play serves**, as 32 colon-separated hex pairs. With Play App Signing that is **Play's own app signing key, which does not exist until the first upload** — afterwards, Play Console → Test and release → App integrity → App signing key certificate. The EAS *upload* key (`eas credentials`, Android → production → Keystore) is a different fingerprint, and listing both is normal, so a build installed straight from EAS verifies too. |
+
+Filled in, the Android file's `sha256_cert_fingerprints` becomes a list like
+`["49:F3:E7:32:…:FD:71", "54:69:33:CA:…:93:63"]`. Nothing else in that file changes: the claimed
+paths and the package name are already right.
+
+### How to verify after a deploy
+
+```bash
+set -o pipefail
+curl -sI https://consignment-warehouse.com/.well-known/apple-app-site-association
+curl -sI https://consignment-warehouse.com/.well-known/assetlinks.json
+```
+
+Each must be a **200** with `content-type: application/json`, no `content-disposition`, and no 301
+or 302 on the way (`curl -sIL` should show a single response). Then Apple's own fetcher —
+`https://app-site-association.cdn-apple.com/a/v1/consignment-warehouse.com` — must return the same
+JSON; it is cached, so allow for a delay after the first deploy. On Android,
+`https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://consignment-warehouse.com&relation=delegate_permission/common.handle_all_urls`
+returns the statement Google actually read, and on a device `adb shell pm get-app-links
+com.irithmetic.consignmentwarehouse` shows `verified` once the fingerprint matches.
+
+Verified locally against `npm start` (production mode): both paths 200, `content-type:
+application/json`, served directly with no redirect — first when both identifiers were placeholders,
+and again with the Apple team id filled in.

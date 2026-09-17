@@ -768,6 +768,39 @@ returns — which means one wrong first paint is unavoidable. The hint picks whi
 signed in before waits behind a skeleton, a device that has not gets the public content immediately.
 It grants nothing, and it is cleared in `endSession` so a failed refresh drops it too.
 
+## App links: the association files
+
+`/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` are served by **this**
+app, from `app/.well-known/*/route.ts`. They are what lets the mobile app open a pasted
+`https://consignment-warehouse.com/lots/…` link itself rather than bouncing the person into a
+browser, and both platforms fetch them **only from the apex over HTTPS** — which is where the
+bidder site is served, and the reason they live here rather than in the mobile repo.
+
+**Route handlers, not `public/`.** Apple's file must have **no extension** and be served as
+`application/json`; a `public/` file with no extension gets whatever the static layer infers, and
+Amplify's rewrites get an opinion too. A route handler states the header outright, and the pair is
+written the same way. They are prerendered static (`dynamic = "force-static"`), so serving them
+costs a cached response, not a render.
+
+**They are outside `app/(app)/`, so `AuthGuard` is not in their path at all** — the guard is a React
+component in that group's layout, and `lib/auth/publicPaths.ts` is a list of *pages* it may let
+through. Neither file is a page and neither reaches that list, so **do not add them to it**.
+
+**Claimed: `/lots/*` and `/auctions/*`** — the canonical links people paste into a WhatsApp thread.
+**Deliberately not claimed: `/`, `/login`, `/search`, `/profile`.** A link to the front door or to a
+sign-in should stay in the browser; opening the app for a whole-site link is how people end up
+unable to read a page they were sent.
+
+**The Apple team id is filled in; the Android fingerprint is still a placeholder.** The team id is
+`CFZK4RA928`, and **it belongs to the owner's individual Apple enrolment, not to Irithmetic
+Consulting** — treat it as a value that can change, not a constant: moving the app to a company
+account issues a different Team ID, and this file must then be refilled and redeployed, with
+universal links broken in between. `ANDROID_SHA256_CERT_FINGERPRINT` waits on the first Play upload,
+because with Play App Signing the fingerprint that matters is Play's own signing key, which does not
+exist until then. Until it lands, an https link on Android **opens the web app exactly as it does
+today**: a working fallback, not a breakage. Never guess either value; a wrong one fails silently —
+see NOTES.md for where each comes from and how to verify after a deploy.
+
 ## Theming
 
 Light / Dark / System, selectable on `/profile`. **Dark is the default and the product's
