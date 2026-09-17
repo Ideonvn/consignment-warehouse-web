@@ -9,7 +9,7 @@ import { useLotSubscription } from "@/lib/hooks/useLotSubscription";
 import { useNow } from "@/lib/hooks/useTicker";
 import { isLotOpen } from "@/lib/format/time";
 import { lotOutcome } from "@/lib/format/lotStatus";
-import type { MyBid } from "@/types/api";
+import type { Auction, MyBid } from "@/types/api";
 import { BidSheet, type BidTarget } from "@/components/bid/BidSheet";
 import { Button } from "@/components/ui/Button";
 import { Countdown } from "@/components/ui/Countdown";
@@ -88,7 +88,10 @@ export function BiddingList() {
   const groups: Group[] = [
     { key: "winning", title: "Winning", rows: rows.filter((row) => row.is_open && row.am_i_leading) },
     { key: "outbid", title: "Outbid", rows: rows.filter((row) => row.is_open && !row.am_i_leading) },
-    { key: "ended", title: "Ended", rows: rows.filter((row) => !row.is_open) },
+    ...endedGroups(
+      rows.filter((row) => !row.is_open),
+      auctions ?? [],
+    ),
   ].filter((group) => group.rows.length > 0);
 
   return (
@@ -147,6 +150,41 @@ export function BiddingList() {
       />
     </div>
   );
+}
+
+/**
+ * Closed rows, one group per auction, newest-closing auction first. Which
+ * finished sales appear is the server's decision (`/me/bids` shares its window
+ * with `/auctions`); this only names and orders them.
+ *
+ * A row whose auction is not in hand — the auctions query has not arrived, or
+ * failed — goes into one plain "Ended" group last, so a slow request shows what
+ * it always did and then sharpens rather than holding the list back.
+ */
+function endedGroups(rows: MyBid[], auctions: Auction[]): Group[] {
+  const byId = new Map(auctions.map((auction) => [auction.id, auction]));
+  const known = new Map<string, { auction: Auction; rows: MyBid[] }>();
+  const unknown: MyBid[] = [];
+  for (const row of rows) {
+    const auction = byId.get(row.auction_id);
+    if (!auction) {
+      unknown.push(row);
+      continue;
+    }
+    const group = known.get(auction.id) ?? { auction, rows: [] };
+    group.rows.push(row);
+    known.set(auction.id, group);
+  }
+  return [
+    ...[...known.values()]
+      .sort((a, b) => Date.parse(b.auction.ends_at) - Date.parse(a.auction.ends_at))
+      .map(({ auction, rows: auctionRows }) => ({
+        key: `ended-${auction.id}`,
+        title: `Ended · ${auction.name}`,
+        rows: auctionRows,
+      })),
+    { key: "ended", title: "Ended", rows: unknown },
+  ];
 }
 
 const OUTCOME_TEXT: Record<string, string> = {

@@ -1,10 +1,11 @@
 "use client";
 
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { getMyAccount } from "@/lib/api/endpoints";
-import { describeBalance } from "@/lib/format/account";
+import { describeBalance, winBreakdown } from "@/lib/format/account";
 import { useNewWins } from "@/lib/hooks/useNewWins";
 import { Button } from "@/components/ui/Button";
 import { LotImage } from "@/components/ui/LotImage";
@@ -22,20 +23,30 @@ export function WinCelebration() {
   const { newWins, acknowledge } = useNewWins();
   const reduceMotion = useReducedMotion();
 
-  const { data: account } = useQuery({
-    queryKey: ["account", "summary"],
-    queryFn: () => getMyAccount({ limit: 1, offset: 0 }),
+  const { data: account, isPending: accountPending } = useQuery({
+    // Its own key: the summary elsewhere holds one entry, and this needs the
+    // won lots' charges plus the entry before them.
+    queryKey: ["account", "win-breakdown"],
+    queryFn: () => getMyAccount({ limit: 50, offset: 0 }),
     enabled: newWins.length > 0,
     // The winning charge is posted at close, so a cached balance from before the
     // win would understate what they owe on the one screen that states it.
     staleTime: 0,
   });
 
-  if (newWins.length === 0) return null;
+  // Wait for the balance rather than let the card arrive after first paint and
+  // push the sheet taller. On an error the modal opens without it, as before.
+  if (newWins.length === 0 || accountPending) return null;
 
   const currency = account?.data.currency_code ?? "ZAR";
   const standing = account ? describeBalance(account.data.balance_minor) : null;
   const many = newWins.length > 1;
+  const breakdown = account
+    ? winBreakdown(
+        account.data,
+        newWins.map((win) => win.lot_id),
+      )
+    : null;
 
   return (
     <Sheet open onClose={acknowledge} title={many ? "You won!" : "You won!"} hideTitle>
@@ -81,9 +92,46 @@ export function WinCelebration() {
 
         {standing ? (
           <div className="mt-5 rounded-2xl border border-border bg-surface-raised p-4">
+            {breakdown ? (
+              <dl className="mb-3 flex flex-col gap-1.5 border-b border-border pb-3 text-sm">
+                {breakdown.lots.map((lot) => {
+                  const win = newWins.find((row) => row.lot_id === lot.lotId);
+                  if (!win) return null;
+                  return (
+                    <Fragment key={lot.lotId}>
+                      <BreakdownLine
+                        label={`Lot ${win.lot_number} · ${win.title}`}
+                        amount={<Money minor={lot.hammerMinor} currency={currency} />}
+                      />
+                      {lot.premiumMinor !== null ? (
+                        <BreakdownLine
+                          label={`Buyer's premium · Lot ${win.lot_number}`}
+                          amount={<Money minor={lot.premiumMinor} currency={currency} />}
+                        />
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+                {breakdown.beforeMinor > 0 ? (
+                  <BreakdownLine
+                    label="Credit already on account"
+                    amount={
+                      <>
+                        −<Money minor={breakdown.beforeMinor} currency={currency} />
+                      </>
+                    }
+                  />
+                ) : breakdown.beforeMinor < 0 ? (
+                  <BreakdownLine
+                    label="Already owing"
+                    amount={<Money minor={-breakdown.beforeMinor} currency={currency} />}
+                  />
+                ) : null}
+              </dl>
+            ) : null}
             <p className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-text-muted">
-                {standing.tone === "due" ? "Total to pay" : "Your balance"}
+                {breakdown && standing.tone === "due" ? "To pay" : "Your balance"}
               </span>
               <span
                 className={
@@ -126,5 +174,14 @@ export function WinCelebration() {
         </div>
       </div>
     </Sheet>
+  );
+}
+
+function BreakdownLine({ label, amount }: { label: string; amount: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="min-w-0 truncate text-text-muted">{label}</dt>
+      <dd className="shrink-0 text-text">{amount}</dd>
+    </div>
   );
 }

@@ -6,9 +6,9 @@ import { getMyAccount, listAuctions } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
 import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import type { Auction } from "@/types/api";
+import { AuctionSections } from "@/components/auction/AuctionSections";
 import { Countdown } from "@/components/ui/Countdown";
 import { Money } from "@/components/ui/Money";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LotImage } from "@/components/ui/LotImage";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -73,19 +73,21 @@ export function AuctionList() {
         </div>
       ) : error ? (
         <ErrorState error={error} onRetry={() => void refetch()} title="Couldn't load auctions" />
-      ) : auctions.length === 0 ? (
-        <EmptyState
-          title="No auctions yet"
-          description="Nothing is running right now. Check back soon — new consignments land every week."
-        />
       ) : (
-        <ul className="flex flex-col gap-4">
-          {auctions.map((auction) => (
-            <li key={auction.id}>
-              <AuctionCard auction={auction} balanceMinor={balanceMinor} />
-            </li>
-          ))}
-        </ul>
+        <AuctionSections
+          auctions={auctions}
+          renderCard={(auction) => <AuctionCard auction={auction} balanceMinor={balanceMinor} />}
+          empty={{
+            title: "No auctions yet",
+            description:
+              "Nothing is running right now. Check back soon — new consignments land every week.",
+          }}
+          emptyWithFinished={{
+            title: "Nothing running right now",
+            description:
+              "The next auction isn't open yet. New consignments land every week — meanwhile, see how the last one went.",
+          }}
+        />
       )}
     </PhoneColumn>
   );

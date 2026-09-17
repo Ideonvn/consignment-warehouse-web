@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { listPublicAuctions } from "@/lib/api/publicEndpoints";
+import { AuctionSections } from "@/components/auction/AuctionSections";
 import { Countdown } from "@/components/ui/Countdown";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LotImage } from "@/components/ui/LotImage";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -44,21 +44,21 @@ export function PublicAuctionList() {
           <Skeleton className="h-32 w-full rounded-card" />
           <Skeleton className="h-32 w-full rounded-card" />
         </div>
-      ) : auctions.length === 0 ? (
-        <div className="mt-6">
-          <EmptyState
-            title="Nothing public right now"
-            description="There's no auction open to the public at the moment. Check back soon."
-          />
-        </div>
       ) : (
-        <ul className="mt-6 flex flex-col gap-3">
-          {auctions.map((auction) => (
-            <li key={auction.id}>
-              <PublicAuctionCard auction={auction} />
-            </li>
-          ))}
-        </ul>
+        <AuctionSections
+          className="mt-6"
+          auctions={auctions}
+          renderCard={(auction) => <PublicAuctionCard auction={auction} />}
+          empty={{
+            title: "Nothing public right now",
+            description: "There's no auction open to the public at the moment. Check back soon.",
+          }}
+          emptyWithFinished={{
+            title: "Nothing open right now",
+            description:
+              "There's no auction open to the public at the moment. Check back soon — meanwhile, see how the last one went.",
+          }}
+        />
       )}
     </PhoneColumn>
   );

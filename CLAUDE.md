@@ -386,8 +386,15 @@ appearance too; `BidSheet` holds only while the maximum is still the untyped min
 language, the arrow-key equivalents and the whole card surface they lived on are gone — see "One
 layout" below for what replaced them and why. Nothing in this app responds to a drag.
 
-**Winning is announced once, properly.** A win is a `/me/bids` row that has ended with the user
-still leading. Which wins have been celebrated lives in `localStorage` (`cw.wins_seen`) — it is
+**Winning is announced once, properly.** A win is a `/me/bids` row that is **`ended_sold` with
+the user leading** (`isWin` in `lib/hooks/useNewWins.ts`). `am_i_leading` on a closed row is not
+enough: the backend never clears a lot's leader when it closes below its reserve, is withdrawn or
+is cancelled, so "closed and leading" used to announce **"You won!"** for a lot that did not sell —
+reproduced on the seed as a win modal for a reserve-not-met lot beside an untouched balance. This
+is `status` doing its proper job, labelling an outcome; nobody is asking "can I bid", so the clock
+rule does not apply. A reserve an operator later accepts turns the lot `ended_sold`, and it is
+celebrated then. `lotOutcome` already required `ended_sold` for "You won", which is why only the
+modal was wrong. Which wins have been celebrated lives in `localStorage` (`cw.wins_seen`) — it is
 presentation state, and the cost of being wrong is one repeated announcement, not a lost record.
 The modal is app-wide so it lands wherever the user is, fires live off the closing time (socket
 events only reach lots the current screen subscribes to), and always answers "what now": the lots

@@ -10,8 +10,15 @@ import type { MyBid } from "@/types/api";
 const SEEN_KEY = "cw.wins_seen";
 
 /**
- * A won lot is one that has ended with this user still leading — the same two
- * fields `/me/bids` already carries, so no backend change.
+ * A won lot is one that **sold** with this user leading — two fields `/me/bids`
+ * already carries, so no backend change.
+ *
+ * `am_i_leading` alone is not a win. The backend keeps the leader on a lot that
+ * closed below its reserve, was withdrawn or was cancelled, so leading a closed
+ * lot says nothing about whether it sold. `status` labels the outcome, which is
+ * exactly what it is for; "can I bid" is not being asked, so the clock rule does
+ * not apply. A reserve an operator later accepts turns the lot `ended_sold`,
+ * and it is celebrated then.
  *
  * Which wins have been celebrated is per-device in `localStorage`: it is a
  * presentation detail, not something the business needs to know, and the cost of
@@ -39,7 +46,7 @@ function writeSeen(ids: string[]): void {
 }
 
 export function isWin(row: MyBid): boolean {
-  return !row.is_open && row.am_i_leading;
+  return row.status === "ended_sold" && row.am_i_leading;
 }
 
 export function useNewWins() {
