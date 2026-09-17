@@ -288,7 +288,7 @@ function BidSheetBody({
             <Money minor={amountMinor ?? minimum} currency={currency} />.
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            We bid for you automatically. Right now that means{" "}
+            The system bids for you automatically. Right now that means{" "}
             <Money minor={payNow} currency={currency} className="text-text" />.
           </p>
           {existingMax !== null ? (
