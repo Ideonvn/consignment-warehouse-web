@@ -109,7 +109,8 @@ export function setNotificationPreferences(
 /* ------------------------------------------------------------ auctions --- */
 
 /**
- * **The server already excludes anything that ended more than two weeks ago.**
+ * **The server already applies the ended-auction window** — one day, plus the
+ * most recently finished sale whenever it ended, whichever is more.
  * Do not filter for that here — one copy of the rule, on the side that owns it.
  */
 export function listAuctions(params: {
@@ -139,7 +140,7 @@ export function listLots(
 /**
  * Every lot this caller can see, across every auction.
  *
- * **The two-week window that hides old auctions from `GET /auctions` does not
+ * **The list window that hides old auctions from `GET /auctions` does not
  * apply here** — search exists to answer "what did that go for". The server
  * owns that exemption; nothing in this client re-applies the window, and
  * nothing here may assert a bid state joined from `/me/bids`, which *is*
@@ -201,9 +202,10 @@ export function cancelAutoBid(lotId: string): Promise<void> {
 }
 
 /**
- * Every lot this user has money on. **The server already excludes anything whose
- * auction ended more than two weeks ago** — never filter for that again here: a
- * second copy of the rule is a second thing to keep in step.
+ * Every lot this user has money on. **The server already applies the
+ * ended-auction window** — the same one `GET /auctions` uses, so the two
+ * screens agree — and never filter for it again here: a second copy of the rule
+ * is a second thing to keep in step.
  */
 export function listMyBids(
   params: { active_only?: boolean; limit?: number } = {},

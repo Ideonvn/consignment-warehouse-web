@@ -601,7 +601,7 @@ the most obvious search there is.
 
 ### `/me/bids` is not trustworthy here, and that is the whole reason this section exists
 
-**`GET /me/bids` is windowed by the two-week rule. Search is deliberately not.** Search reaches
+**`GET /me/bids` is windowed by the ended-auction window. Search is deliberately not.** Search reaches
 auctions that aged out of `GET /auctions`, because "what did that go for" is the question it
 answers. So a search row can be a lot the bidder bid on and even won, absent from `/me/bids` *only
 because that endpoint filtered it* — and with a small dataset the response is nowhere near the 200
@@ -1045,8 +1045,9 @@ per lot, and **lot search at 60/min per user** with a real `Retry-After`.
   state so the reduce-motion snap lands on the message. Same property as `urgent`.
 - **Never put the access token in storage**, and never read the refresh token from JS.
 - **Never compute `minimum_next_bid_minor`, or reveal a reserve amount.**
-- **Never re-apply a filter the server already owns.** `GET /auctions` and `GET /me/bids` exclude
-  anything whose auction ended more than two weeks ago. A second copy of that rule in the client is
+- **Never re-apply a filter the server already owns.** `GET /auctions` and `GET /me/bids` list an
+  auction that ended inside the window — one day — plus the most recently finished sale whenever it
+  ended, and exclude everything else. A second copy of that rule in the client is
   a second thing to keep in step, and it will drift. **`GET /lots/search` is exempt from that window
   on the server**, which is precisely why `/me/bids` cannot be joined against every search row —
   see "Lot search".

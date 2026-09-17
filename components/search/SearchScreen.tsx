@@ -204,7 +204,7 @@ export function SearchScreen() {
                        * The whole point of this screen's care. A **biddable**
                        * lot's auction has not ended, so `/me/bids` reliably
                        * holds it and the join is sound. A **closed** one may
-                       * sit outside that endpoint's two-week window, where an
+                       * sit outside that endpoint's list window, where an
                        * absent row means "filtered", not "never bid" — so this
                        * claims nothing and shows the lot's outcome instead.
                        */

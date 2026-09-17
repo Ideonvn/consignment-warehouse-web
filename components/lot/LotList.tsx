@@ -336,8 +336,9 @@ export function LotRow({
    * The bidder's own state, or **null when the app genuinely cannot say**.
    *
    * Null renders no line at all rather than falling back to "NOT BIDDING":
-   * `/me/bids` is windowed by the two-week rule and search is not, so on a row
-   * from an auction that aged out of that window there is no answer to give.
+   * `/me/bids` is windowed by the ended-auction window and search is not, so on
+   * a row from an auction that aged out of that window there is no answer to
+   * give.
    */
   bidStatus: MyBidStatus | null;
   /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useId, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -21,6 +21,9 @@ import { PaymentDetails } from "@/components/account/PaymentDetails";
  */
 export function WinCelebration() {
   const { newWins, acknowledge } = useNewWins();
+  // The visible heading is the dialog's accessible name; see `Sheet`'s
+  // `labelledBy`.
+  const titleId = useId();
   const reduceMotion = useReducedMotion();
 
   const { data: account, isPending: accountPending } = useQuery({
@@ -49,7 +52,7 @@ export function WinCelebration() {
     : null;
 
   return (
-    <Sheet open onClose={acknowledge} title={many ? "You won!" : "You won!"} hideTitle>
+    <Sheet open onClose={acknowledge} title="You won!" labelledBy={titleId}>
       <div className="px-5 pt-1 pb-6">
         <motion.div
           initial={reduceMotion ? false : { scale: 0.85, opacity: 0 }}
@@ -60,7 +63,7 @@ export function WinCelebration() {
           <p aria-hidden className="text-5xl">
             🎉
           </p>
-          <h2 className="mt-2 text-2xl font-semibold">
+          <h2 id={titleId} className="mt-2 text-2xl font-semibold">
             {many ? `You won ${newWins.length} lots!` : "You won!"}
           </h2>
           <p className="mt-1 text-sm text-text-muted">

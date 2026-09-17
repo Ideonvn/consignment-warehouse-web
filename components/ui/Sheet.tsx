@@ -13,6 +13,15 @@ type SheetProps = {
   title: string;
   /** Hide the title visually when the sheet content already states it. */
   hideTitle?: boolean;
+  /**
+   * Id of a heading **inside `children`** to name the dialog with, for content
+   * that already renders the same words visibly. Without it that content would
+   * need `hideTitle`, and the hidden copy plus the visible one put the same
+   * sentence in the accessibility tree twice — a screen reader says "You won!"
+   * and then says it again. Given one, `Sheet` renders no heading of its own
+   * and `aria-labelledby` points at the caller's real element.
+   */
+  labelledBy?: string;
   children: ReactNode;
   className?: string;
 };
@@ -21,7 +30,15 @@ type SheetProps = {
  * Bottom sheet: modal, focus-trapped, escape- and backdrop-dismissable, and
  * draggable down to close on touch.
  */
-export function Sheet({ open, onClose, title, hideTitle, children, className }: SheetProps) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  hideTitle,
+  labelledBy,
+  children,
+  className,
+}: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -108,7 +125,7 @@ export function Sheet({ open, onClose, title, hideTitle, children, className }: 
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby={titleId}
+            aria-labelledby={labelledBy ?? titleId}
             tabIndex={-1}
             initial={reduceMotion ? { opacity: 0 } : { y: "100%" }}
             animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
@@ -129,15 +146,17 @@ export function Sheet({ open, onClose, title, hideTitle, children, className }: 
             <div className="flex justify-center pt-3 pb-1">
               <span aria-hidden className="h-1 w-10 rounded-full bg-border" />
             </div>
-            <h2
-              id={titleId}
-              className={cn(
-                "px-5 pb-2 text-base font-semibold",
-                hideTitle && "sr-only",
-              )}
-            >
-              {title}
-            </h2>
+            {labelledBy ? null : (
+              <h2
+                id={titleId}
+                className={cn(
+                  "px-5 pb-2 text-base font-semibold",
+                  hideTitle && "sr-only",
+                )}
+              >
+                {title}
+              </h2>
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
           </motion.div>
         </div>
