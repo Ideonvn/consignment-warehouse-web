@@ -1,7 +1,20 @@
-import { COUNTRIES, UNLISTED_COUNTRY, type Country } from "@/lib/auth/countries";
+import {
+  COUNTRIES,
+  DEFAULT_COUNTRY,
+  UNLISTED_COUNTRY,
+  type Country,
+} from "@/lib/auth/countries";
 
 /**
  * Phone entry helpers: grouping for the eye, E.164 for the wire.
+ *
+ * **No shared package**, deliberately — the admin portal
+ * (`consignment-warehouse-admin`) and the mobile app
+ * (`consignment-warehouse-app`) carry their own copy of this file. A fix to any
+ * copy must be carried to the other two. The two parsing fixes in `parseEntry`
+ * and the one in `formatNational` arrived that way: they were found and fixed in
+ * admin, carried to mobile, and missed here until a typed `+44…` number was
+ * replayed and found to compose onto `+27`.
  *
  * **Hand-rolled rather than `libphonenumber-js`.** The library formats and
  * validates every country correctly and has an `AsYouType` formatter, and it
@@ -43,7 +56,19 @@ export type ParsedEntry = {
 export function parseEntry(raw: string, current: Country): ParsedEntry {
   const hasPlus = raw.trimStart().startsWith("+");
   const digits = raw.replace(/\D/g, "");
-  if (digits.length === 0) return { country: current, national: "" };
+  if (digits.length === 0) {
+    // A bare "+" is the first keystroke of an international number. Returned
+    // under the current country it rendered as an empty field, the plus
+    // vanished, and the "44…" typed next was composed onto +27 — so typing a
+    // code one key at a time only worked by pasting.
+    if (hasPlus) return { country: UNLISTED_COUNTRY, national: "" };
+    // An unlisted code lived in the digits just deleted. Keeping "Other" would
+    // compose the next local "082…" as +82 — South Korea.
+    return {
+      country: current === UNLISTED_COUNTRY ? DEFAULT_COUNTRY : current,
+      national: "",
+    };
+  }
 
   if (hasPlus) {
     const match = countryForE164(digits);
@@ -77,6 +102,10 @@ function stripTrunk(national: string): string {
  * countable but not necessarily how a local writes it.
  */
 export function formatNational(national: string, country: Country): string {
+  // For an unlisted code these digits are the whole international number, so its
+  // plus stays on screen — which is also what lets the next keystroke be parsed
+  // as international rather than local.
+  if (country === UNLISTED_COUNTRY) return `+${group(national, [])}`;
   if (national.length === 0) return "";
 
   return group(national, country.groups ?? []);
