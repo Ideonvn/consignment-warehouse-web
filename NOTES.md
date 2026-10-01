@@ -705,12 +705,17 @@ JS touches the gesture — the browser is being asked to do it. To confirm in th
 
 ### Environment notes for the next person
 
-- `make dev-all` binds uvicorn to `127.0.0.1`. For a phone (or for a browser on the LAN IP) run the
-  API with `--host 0.0.0.0` and point `S3_PUBLIC_URL_BASE` at the LAN IP too, or lot photos resolve
-  to `localhost:9100` and never load off-device.
-- **Serve the web app from the same host as the API.** With the page on `localhost:3000` and the API
-  on `192.168.1.184:8000`, the refresh cookie is cross-site and is not sent, so every reload lands
-  as an anonymous visitor. Use the LAN IP for both.
+- `make dev-all` binds uvicorn to `0.0.0.0`, so the API is reachable over the LAN with no extra
+  flag. `S3_PUBLIC_URL_BASE` must be the LAN address (`http://192.168.1.184:9400/...`), not
+  `localhost`, or lot photos resolve to the device itself and never load off-device.
+- **Open the app at the LAN address, not `localhost`.** `.env.local` points at
+  `http://192.168.1.184:8400`, and an origin is scheme+host+port: with the page on
+  `localhost:3400` and the API on `192.168.1.184:8400` the refresh cookie is cross-site and is not
+  sent, so every reload lands as an anonymous visitor — and nothing in the console says why. Use
+  `http://192.168.1.184:3400` (admin portal: `:3410`).
+- **That address is DHCP-assigned.** When it changes, five values need it: `.env.local` here, the
+  admin portal's `.env.local`, the app's `.env`, and the backend's `CORS_ALLOWED_ORIGINS` and
+  `S3_PUBLIC_URL_BASE`.
 
 ### Test data left behind
 

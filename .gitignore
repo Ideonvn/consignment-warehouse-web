@@ -43,3 +43,6 @@ yarn-error.log*
 next-env.d.ts
 
 .playwright-mcp
+
+# Agent prompt files — local workflow artifacts, not part of the project.
+PROMPT-*.md
