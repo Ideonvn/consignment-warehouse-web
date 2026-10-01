@@ -15,7 +15,7 @@ The admin portal is a separate project.
 - **Node.js 20.9+** (Next.js 16 requirement).
 - **The backend running locally**, from the API repo:
   ```bash
-  make dev    # serves http://localhost:8000
+  make dev    # serves http://localhost:8400
   make seed   # test accounts and a live auction with lots
   ```
   While the backend runs with `APP_ENV=local` the OTP code is always `0000`.
@@ -27,7 +27,7 @@ Seeded bidders: `+27820000002`, `+27820000003`, `+27820000004`. Admin: `+2782000
 ```bash
 npm install
 cp .env.example .env.local
-npm run dev          # http://localhost:3000
+npm run dev          # http://localhost:3400
 ```
 
 Sign in with a seeded number in full E.164 form (`+27820000004`) and the code `0000`. The backend
@@ -37,8 +37,8 @@ does not infer a country from a local `082…` format.
 
 | Variable | Purpose | Local value |
 |---|---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | REST base URL, no trailing slash | `http://localhost:8000/api/v1` |
-| `NEXT_PUBLIC_WS_URL` | WebSocket endpoint for live bid events | `ws://localhost:8000/api/v1/ws` |
+| `NEXT_PUBLIC_API_BASE_URL` | REST base URL, no trailing slash | `http://localhost:8400/api/v1` |
+| `NEXT_PUBLIC_WS_URL` | WebSocket endpoint for live bid events | `ws://localhost:8400/api/v1/ws` |
 | `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS` | How to pay, in the operator's words | unset — falls back to "contact the warehouse" |
 | `NEXT_PUBLIC_OTP_CODE_LENGTH` | Digits in the code inputs. **Local only** | `4`, because the local backend's dev code is `0000` |
 

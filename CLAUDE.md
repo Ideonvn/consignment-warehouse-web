@@ -1048,7 +1048,7 @@ Three files carry most of the risk and are worth reading before changing anythin
 ## Running it
 
 ```bash
-npm run dev         # http://localhost:3000
+npm run dev         # http://localhost:3400
 npm run build
 npm run lint
 npm run typecheck   # tsc --noEmit
@@ -1057,6 +1057,16 @@ npm run typecheck   # tsc --noEmit
 The backend must be running from its own repo with **`make dev-all`** (API *and* the lifecycle
 worker — without the worker no lot ever opens, closes or extends, and the realtime lifecycle events
 never fire) plus **`make seed`**. Copy `.env.example` to `.env.local`.
+
+**The dev block is 3400 for this app, 8400 for the API, 3410 for the admin portal** — it moved off
+`3000`/`8000` because another project on the owner's machine holds `:3000`, and nothing about
+production changed. **This app's port is not a free choice**: `http://localhost:3400` is what the
+backend's `CORS_ALLOWED_ORIGINS` allows, matched exactly, and every request here sends
+`credentials: "include"`, so the API must answer with that exact origin rather than a wildcard. On
+any other port the preflight comes back as a bare `400`, which the browser reports as an opaque
+network failure rather than a CORS error — so it reads as "the API is down" while `curl` against the
+same API keeps working. `npm run dev` therefore pins `-p 3400` rather than leaving it to Next's
+default.
 
 While the backend runs with `APP_ENV=local` the **OTP code is always `0000`**. Seeded bidders:
 `+27820000002`, `+27820000003`, `+27820000004`; admin `+27820000001`. Numbers must be full E.164 —

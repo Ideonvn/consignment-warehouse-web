@@ -24,11 +24,11 @@ happen.
 Then here:
 
 ```bash
-npm run dev       # http://localhost:3000
+npm run dev       # http://localhost:3400
 ```
 
-Port 3000 matters — it is one of two origins the backend allows. On another port every request fails
-in a way that looks like the backend being down.
+Port 3400 matters — it is one of two origins the backend allows (the other is the admin portal on
+3410). On another port every request fails in a way that looks like the backend being down.
 
 Rate-limited while testing? **`make reset-limits`** in the backend clears the OTP and bid counters
 instantly. Never wait an hour.

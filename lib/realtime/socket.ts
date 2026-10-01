@@ -3,7 +3,7 @@ import { serverMessageSchema } from "@/lib/api/schemas";
 import { useRealtimeStore } from "@/lib/realtime/store";
 import type { ClientMessage, ServerMessage } from "@/types/api";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/api/v1/ws";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8400/api/v1/ws";
 
 /** A reused or expired ticket is refused with this code before the accept. */
 const TICKET_REJECTED = 4401;

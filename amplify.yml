@@ -16,7 +16,7 @@ frontend:
         # Fail before building rather than after shipping.
         #
         # These two are read at build time and inlined into the client bundle, and
-        # `lib/api/client.ts` and `lib/realtime/socket.ts` fall back to localhost:8000
+        # `lib/api/client.ts` and `lib/realtime/socket.ts` fall back to localhost:8400
         # when they are unset — which is right for `npm run dev` without a .env.local,
         # and catastrophic here. A build that lost its branch environment would produce a
         # production bundle pointed at whatever machine happens to be running the
