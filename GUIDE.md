@@ -52,7 +52,7 @@ fight.
 | `+27820000034` | R0, no entries | An empty statement |
 | `+27820000015` | R11 400 | Every entry type on one statement |
 | `+27820000016` | R9 000 | A statement containing a correction |
-| `+27820000020` | **−R65 392,50** | The "owing" statement, with a won lot and its premium |
+| `+27820000020` | **−R65 392,50** | The "owing" statement, with a won lot and its commission |
 | `+27820000032/33` | — | Suspended accounts |
 
 **Auctions:**
@@ -319,14 +319,14 @@ without reloading**.
 *Expect:* an empty state, not a broken screen.
 
 **F2 — As `+27820000015`**, open it.
-*Expect:* every entry type, human labels — "Lot won", "Buyer's premium", not raw names. Charges and
+*Expect:* every entry type, human labels — "Lot won", "Commission", not raw names. Charges and
 credits distinct.
 
 **F3 — As `+27820000016`.**
 *Expect:* the correction shown as its own line, **not** netted against what it corrects.
 
 **F4 — As `+27820000020`** (−R65 392,50).
-*Expect:* the balance stated as **due**, in plain language. A won lot and a **separate** premium
+*Expect:* the balance stated as **due**, in plain language. A won lot and a **separate** commission
 line. It should read as an invoice, not an error.
 
 **F5 — Page the statement.**

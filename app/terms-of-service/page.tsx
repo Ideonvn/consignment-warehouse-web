@@ -25,7 +25,7 @@ export default function TermsOfServicePage() {
         <p>
           Consignment Warehouse is operated by {OPERATOR_NAME} (“we”, “us”). We run online auctions of
           goods that are consigned to us for sale. Each auction may also have its own rules, such as a
-          deposit or a buyer’s premium. You can see them by tapping ⓘ on the auction. Those rules
+          deposit or a commission. You can see them by tapping ⓘ on the auction. Those rules
           apply alongside these terms. If they conflict, the auction’s rules apply to that auction.
         </p>
         <p>
@@ -97,7 +97,7 @@ export default function TermsOfServicePage() {
       <LegalSection heading="7. Winning a lot">
         <p>
           When a lot closes, the highest bid wins, as long as any reserve has been met. At that point
-          you have a binding agreement to buy the lot for your winning bid, plus any buyer’s premium
+          you have a binding agreement to buy the lot for your winning bid, plus any commission
           or other charges stated in the auction’s rules.
         </p>
         <LegalList>
@@ -115,7 +115,7 @@ export default function TermsOfServicePage() {
         <LegalList>
           <li>
             You have one running balance with us. Deposits and payments add credit. Lots you win, and
-            any buyer’s premium, are charged against it. A negative balance is an amount you owe us.
+            any commission, are charged against it. A negative balance is an amount you owe us.
           </li>
           <li>
             Some auctions require credit on your account, a deposit, before you can bid. Browsing never

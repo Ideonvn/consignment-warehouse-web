@@ -565,7 +565,7 @@ seconds, not a corruption. The guard is correct either way.
 **A ⓘ on the auction header opens the rules**, built entirely from the current `AuctionOut`: the
 deposit (`deposit_amount_minor`, and an honest "no deposit is needed" at zero), the close in the
 user's zone **with the zone named**, how anti-snipe really works, and the existing `PaymentDetails`
-block. Three things stakeholders asked for are left out rather than invented — buyer's premium (the
+block. Three things stakeholders asked for are left out rather than invented — commission (the
 column exists but `AuctionOut` does not expose it; see `NOTES.md`), VAT treatment and the collection
 address. It is member-only: the public auction shape carries no anti-snipe fields and an anonymous
 visitor has no payment reference.
@@ -955,7 +955,7 @@ locally quietly under-quotes anyone in debt.
 **A negative balance is an invoice, not an error state.** These are customers who have just won
 something. `lib/format/account.ts` turns the signed number into plain language ("R2 000 due" /
 "R2 000 on account") because "−200000" is not usable. It also maps `entry_type` to human labels —
-`lot_won` is "Lot won", `buyers_premium` is "Buyer's premium", `reversal` is "Correction".
+`lot_won` is "Lot won", `commission` is "Commission", `reversal` is "Correction".
 
 **A `reversal` is shown as its own line and never netted against the entry it corrects.** The
 statement is a history; an entry that silently vanishes is worse than one that is explained. The

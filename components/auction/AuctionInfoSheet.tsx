@@ -11,7 +11,7 @@ import type { Auction } from "@/types/api";
  * "What are the rules here?", answered from fields the auction already carries.
  *
  * **Three things asked for are deliberately absent rather than invented:** the
- * buyer's premium (the column exists on the auction but `AuctionOut` does not
+ * commission (the column exists on the auction but `AuctionOut` does not
  * expose it — noted in NOTES.md as a backend request), VAT treatment, and the
  * collection address. There is no data for any of them, and the payments config
  * already sets the precedent: an honest "contact the warehouse" beats invented

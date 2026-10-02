@@ -18,6 +18,5 @@ export function lotPreviewDescription(lot: PublicLotDetail, currency = "ZAR"): s
   const price = hasBids
     ? `Current bid ${formatMoney(lot.current_bid_minor ?? 0, currency)}`
     : `Starting at ${formatMoney(lot.starting_price_minor, currency)}`;
-  const bids = lot.bid_count === 1 ? "1 bid" : `${lot.bid_count} bids`;
-  return [price, bids, lot.description?.trim()].filter(Boolean).join(" · ").slice(0, 200);
+  return [price, lot.description?.trim()].filter(Boolean).join(" · ").slice(0, 200);
 }

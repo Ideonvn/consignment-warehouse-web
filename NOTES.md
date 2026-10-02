@@ -50,7 +50,7 @@ Judgement calls, backend requests, deferrals, and the final journey result.
 - **CORS with credentials is required.** The client sends `credentials: "include"` on every call so
   the HttpOnly refresh cookie flows; the backend must keep `Access-Control-Allow-Credentials: true`
   with a non-wildcard origin. (It does today.)
-- **Expose the buyer's premium on `AuctionOut`.** *(Raised in the urgency/wording round.)* The
+- **Expose the commission on `AuctionOut`.** *(Raised in the urgency/wording round.)* The
   column exists on the auction — the seed prints it per auction (10%, 15%, none) — but the bidder's
   `AuctionOut` does not carry it, so the new ⓘ information sheet cannot answer the one question it
   exists to answer: **"what will this actually cost me?"** A bidder who wins at R10 000 and is then
@@ -481,7 +481,7 @@ re-raises them, and because the second one has a lesson attached.
   entry type's label contains an underscore. The client still maps `entry_type` to its own label
   for the row heading (`lib/format/account.ts`) — that stays, because the heading and the
   description are separate strings.
-- **`AuctionCreateIn` now persists `deposit_amount_minor` and `buyers_premium_bps`.** The create
+- **`AuctionCreateIn` now persists `deposit_amount_minor` and `commission_bps`.** The create
   endpoint builds from the payload's own fields, and a contract test asserts every field on the
   create schema round-trips to the database — driven from the schema itself, so a new field cannot
   go missing the same way.

@@ -111,13 +111,10 @@ export function PublicLotScreen({ lotId }: { lotId: string }) {
               currency={currency}
             />
           </p>
-          <p className="mt-1 text-sm text-text-muted">
-            {lot.bid_count === 0
-              ? "No bids yet"
-              : `${lot.bid_count} bid${lot.bid_count === 1 ? "" : "s"}`}
-            {/* A boolean, and all a visitor may ever see of a reserve. */}
-            {hasBids && !lot.reserve_met ? " · reserve not met" : ""}
-          </p>
+          {/* A boolean, and all a visitor may ever see of a reserve. */}
+          {hasBids && !lot.reserve_met ? (
+            <p className="mt-1 text-sm text-text-muted">Reserve not met</p>
+          ) : null}
           {open ? (
             <p className="mt-3 text-sm text-text-muted">
               Next bid from{" "}

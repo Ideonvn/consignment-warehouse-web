@@ -406,9 +406,6 @@ export function LotRow({
 
           <p className="tabular mt-1 text-base font-semibold">
             <Money minor={hasBids ? (lot.current_bid_minor ?? 0) : lot.starting_price_minor} currency={currency} />
-            <span className="ml-1 text-xs font-normal text-text-muted">
-              {hasBids ? `· ${lot.bid_count} ${lot.bid_count === 1 ? "bid" : "bids"}` : "· no bids yet"}
-            </span>
           </p>
 
           {/* `min-h-6` reserves the alarm pill's height up front, so a lot

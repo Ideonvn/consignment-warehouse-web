@@ -10,11 +10,12 @@ type Empty = { title: string; description: string };
  * The auction list split into what is running and what has finished, shared by
  * the member and the anonymous list.
  *
- * **The server decides which finished sales are listed** — the last day's, plus
- * the most recent one whenever it ended. This only groups what came back, by
- * status; there is no date arithmetic here and there must never be, or it is a
- * second copy of that window. Status is fine for grouping because it labels an
- * outcome; nothing here decides whether anyone can bid.
+ * **The server decides which finished sales are listed** — the last day's, and
+ * nothing else. Nothing finished in that window is a real answer, not a gap, so
+ * an empty finished list is simply not rendered. This only groups what came
+ * back, by status; there is no date arithmetic here and there must never be, or
+ * it is a second copy of that window. Status is fine for grouping because it
+ * labels an outcome; nothing here decides whether anyone can bid.
  */
 export function AuctionSections<T extends Listed>({
   auctions,
@@ -67,7 +68,7 @@ export function AuctionSections<T extends Listed>({
 
         {finished.length > 0 ? (
           <section>
-            <SectionHeading>{finished.length === 1 ? "Last auction" : "Recently ended"}</SectionHeading>
+            <SectionHeading>Recently ended</SectionHeading>
             {list(finished)}
           </section>
         ) : null}

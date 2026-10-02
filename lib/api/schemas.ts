@@ -239,7 +239,7 @@ export const ledgerEntryTypeSchema = z.enum([
   "deposit",
   "payment",
   "lot_won",
-  "buyers_premium",
+  "commission",
   "refund",
   "adjustment",
   "reversal",

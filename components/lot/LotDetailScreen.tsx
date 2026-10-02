@@ -164,9 +164,6 @@ export function LotDetailScreen({ lotId }: { lotId: string }) {
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
-            <span>
-              {lot.bid_count} bid{lot.bid_count === 1 ? "" : "s"}
-            </span>
             {open ? (
               <span>
                 Next bid from <Money minor={lot.minimum_next_bid_minor} currency={currency} />

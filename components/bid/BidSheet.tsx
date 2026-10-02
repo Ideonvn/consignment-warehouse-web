@@ -214,8 +214,7 @@ function BidSheetBody({
             ) : (
               <>
                 Starting at{" "}
-                <Money minor={lot.starting_price_minor} currency={currency} className="text-text" />{" "}
-                · no bids yet
+                <Money minor={lot.starting_price_minor} currency={currency} className="text-text" />
               </>
             )}
           </p>
