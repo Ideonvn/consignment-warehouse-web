@@ -235,6 +235,12 @@ export const myBidListSchema = z.array(myBidSchema);
 
 /* -------------------------------------------------------------- account --- */
 
+/**
+ * `deposit` is RETIRED here: security deposits became their own book on
+ * 2026-10-02 and the backend refuses a new ledger entry of that type. The member
+ * stays because entries posted before the split still come back and still have to
+ * render with a name rather than an enum value.
+ */
 export const ledgerEntryTypeSchema = z.enum([
   "deposit",
   "payment",
@@ -268,6 +274,41 @@ export const accountSchema = z.object({
   balance_minor: z.number(),
   currency_code: z.string(),
   entries: z.array(ledgerEntrySchema),
+});
+
+/* -------------------------------------------------------------- deposit --- */
+
+/**
+ * The security deposit — a SECOND book, not a slice of the account.
+ *
+ * `held_minor` is what the bid gate compares against each auction's
+ * `deposit_amount_minor`. Winning a lot charges the account and cannot move this
+ * number, which is why both exist: someone can owe money and still bid, and be in
+ * credit and still be refused.
+ */
+export const depositEntryTypeSchema = z.enum(["paid", "refunded", "reversal"]);
+
+export const depositEntrySchema = z.object({
+  id: z.string(),
+  entry_type: depositEntryTypeSchema,
+  /** Signed: negative means money went back out. */
+  amount_minor: z.number(),
+  currency_code: z.string(),
+  description: z.string().nullable(),
+  reference: z.string().nullable(),
+  created_at: z.string(),
+  /**
+   * What was held after this entry. Accumulated server-side oldest-first and
+   * continued across pages — render it, never recompute it.
+   */
+  held_after_minor: z.number(),
+});
+
+export const depositAccountSchema = z.object({
+  /** Never negative, and never reduced by winning a lot. */
+  held_minor: z.number(),
+  currency_code: z.string(),
+  entries: z.array(depositEntrySchema),
 });
 
 /* ------------------------------------------------------------ realtime --- */

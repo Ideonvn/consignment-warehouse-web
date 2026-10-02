@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMyAccount, listAuctions } from "@/lib/api/endpoints";
+import { getMyDeposit, listAuctions } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/queryKeys";
 import { auctionDueAt, useDueRefresh } from "@/lib/hooks/useDueRefresh";
 import type { Auction } from "@/types/api";
@@ -47,11 +47,15 @@ export function AuctionList() {
 
   // Shown as guidance only — the server decides eligibility, and a bid refusal
   // carries the authoritative numbers. Browsing is never gated on this.
-  const { data: account } = useQuery({
-    queryKey: ["account", "summary"],
-    queryFn: () => getMyAccount({ limit: 1, offset: 0 }),
+  //
+  // The DEPOSIT, not the balance: what someone owes has no bearing on whether
+  // they can bid here, so reading the balance would mark cards as uncovered for
+  // bidders who are perfectly entitled to bid in them.
+  const { data: deposit } = useQuery({
+    queryKey: ["deposit", "summary"],
+    queryFn: () => getMyDeposit({ limit: 1, offset: 0 }),
   });
-  const balanceMinor = account?.data.balance_minor ?? null;
+  const depositHeldMinor = deposit?.data.held_minor ?? null;
 
   const auctions = [...(data ?? [])].sort(
     (a, b) =>
@@ -76,7 +80,9 @@ export function AuctionList() {
       ) : (
         <AuctionSections
           auctions={auctions}
-          renderCard={(auction) => <AuctionCard auction={auction} balanceMinor={balanceMinor} />}
+          renderCard={(auction) => (
+            <AuctionCard auction={auction} depositHeldMinor={depositHeldMinor} />
+          )}
           empty={{
             title: "No auctions yet",
             description:
@@ -118,10 +124,10 @@ function SearchLink() {
 
 function AuctionCard({
   auction,
-  balanceMinor,
+  depositHeldMinor,
 }: {
   auction: Auction;
-  balanceMinor: number | null;
+  depositHeldMinor: number | null;
 }) {
   const isLive = auction.status === "live";
   const isScheduled = auction.status === "scheduled";
@@ -155,7 +161,7 @@ function AuctionCard({
           <p className="mt-1 line-clamp-2 text-sm text-text-muted">{auction.description}</p>
         ) : null}
 
-        <DepositNote auction={auction} balanceMinor={balanceMinor} />
+        <DepositNote auction={auction} depositHeldMinor={depositHeldMinor} />
 
         <div className="mt-3 flex items-center justify-between text-sm">
           <span className="flex items-center gap-2 text-text-muted">
@@ -195,36 +201,41 @@ function AuctionCard({
 /**
  * What this auction asks for before bidding, said before anyone commits to
  * anything. Reassurance when it is already covered costs nothing.
+ *
+ * Compared against the DEPOSIT WE HOLD, which is the only thing the bid gate
+ * reads. A bidder who owes money still has their deposit, and this note must not
+ * suggest otherwise.
  */
 function DepositNote({
   auction,
-  balanceMinor,
+  depositHeldMinor,
 }: {
   auction: Auction;
-  balanceMinor: number | null;
+  depositHeldMinor: number | null;
 }) {
   if (auction.deposit_amount_minor <= 0) return null;
   if (auction.status !== "live" && auction.status !== "scheduled") return null;
 
-  const covered = balanceMinor !== null && balanceMinor >= auction.deposit_amount_minor;
+  const covered =
+    depositHeldMinor !== null && depositHeldMinor >= auction.deposit_amount_minor;
 
   return (
     <p className="mt-2 text-xs text-text-muted">
       {covered ? (
         <>
-          <span className="text-success">Deposit covered</span> — your account has the{" "}
+          <span className="text-success">Deposit covered</span> — we hold the{" "}
           <Money minor={auction.deposit_amount_minor} currency={auction.currency_code} /> this
           auction needs.
         </>
       ) : (
         <>
-          Bidding needs{" "}
+          Bidding needs a{" "}
           <Money
             minor={auction.deposit_amount_minor}
             currency={auction.currency_code}
             className="text-text"
           />{" "}
-          on account. Browsing is free.
+          deposit. Browsing is free.
         </>
       )}
     </p>

@@ -6,7 +6,7 @@ import { placeBid, setAutoBid } from "@/lib/api/endpoints";
 import { applyBidResult } from "@/lib/api/cache";
 import { serverNow } from "@/lib/format/clock";
 import { useRealtimeStore } from "@/lib/realtime/store";
-import { ApiError, BidTooLowError, InsufficientCreditError } from "@/lib/api/errors";
+import { ApiError, BidTooLowError, DepositRequiredError } from "@/lib/api/errors";
 import type { BidResult } from "@/types/api";
 
 export type BidOutcome =
@@ -16,12 +16,16 @@ export type BidOutcome =
   | { kind: "outbid"; result: BidResult }
   /** Someone bid between render and submit; retry from the new minimum. */
   | { kind: "too-low"; minimumNextBidMinor: number }
-  /** Not enough on account for this auction's deposit. */
+  /**
+   * The deposit we hold is short of this auction's requirement. Nothing to do
+   * with what they owe — the two are separate books, so clearing a debt does not
+   * clear this.
+   */
   | {
-      kind: "insufficient-credit";
+      kind: "deposit-required";
       message: string;
       requiredMinor: number;
-      balanceMinor: number;
+      depositHeldMinor: number;
       shortfallMinor: number;
       currencyCode: string;
     }
@@ -102,12 +106,12 @@ export function useBidSubmit() {
         if (cause instanceof BidTooLowError) {
           return { kind: "too-low", minimumNextBidMinor: cause.minimumNextBidMinor };
         }
-        if (cause instanceof InsufficientCreditError) {
+        if (cause instanceof DepositRequiredError) {
           return {
-            kind: "insufficient-credit",
+            kind: "deposit-required",
             message: cause.message,
             requiredMinor: cause.requiredMinor,
-            balanceMinor: cause.balanceMinor,
+            depositHeldMinor: cause.depositHeldMinor,
             shortfallMinor: cause.shortfallMinor,
             currencyCode: cause.currencyCode,
           };

@@ -2,23 +2,34 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { getMyAccount } from "@/lib/api/endpoints";
+import { getMyAccount, getMyDeposit } from "@/lib/api/endpoints";
 import { describeBalance } from "@/lib/format/account";
 import { Money } from "@/components/ui/Money";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils/cn";
 
-/** Profile's way in to the statement, with where they stand shown up front. */
+/**
+ * Profile's way in to the account, with where they stand shown up front.
+ *
+ * Both numbers, because they answer different questions and either one alone is
+ * misleading: the deposit is what lets someone bid, the balance is what they owe.
+ * The deposit leads for that reason — "why can't I bid" is the commoner question.
+ */
 export function AccountSummaryLink() {
   const { data, isPending } = useQuery({
     queryKey: ["account", "summary"],
     // Only the balance is needed here, so ask for the smallest page.
     queryFn: () => getMyAccount({ limit: 1, offset: 0 }),
   });
+  const { data: deposit, isPending: depositPending } = useQuery({
+    queryKey: ["deposit", "summary"],
+    queryFn: () => getMyDeposit({ limit: 1, offset: 0 }),
+  });
 
   const balance = data?.data.balance_minor ?? 0;
   const currency = data?.data.currency_code ?? "ZAR";
   const standing = describeBalance(balance);
+  const held = deposit?.data.held_minor ?? 0;
 
   return (
     <Link
@@ -27,6 +38,16 @@ export function AccountSummaryLink() {
     >
       <div className="min-w-0">
         <p className="text-sm font-semibold">Account</p>
+        {depositPending ? (
+          <Skeleton className="mt-1 h-5 w-32" />
+        ) : (
+          <p className="mt-0.5 text-sm text-text-muted">
+            <span className="font-semibold text-text">
+              <Money minor={held} currency={currency} />
+            </span>{" "}
+            deposit held
+          </p>
+        )}
         {isPending ? (
           <Skeleton className="mt-1 h-5 w-32" />
         ) : (

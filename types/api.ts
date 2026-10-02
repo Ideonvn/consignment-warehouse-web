@@ -6,6 +6,9 @@ import type {
   bidResultSchema,
   bidSchema,
   bidStatusSchema,
+  depositAccountSchema,
+  depositEntrySchema,
+  depositEntryTypeSchema,
   lotCardSchema,
   lotDetailSchema,
   lotImageSchema,
@@ -66,6 +69,9 @@ export type MyBid = z.infer<typeof myBidSchema>;
 export type Account = z.infer<typeof accountSchema>;
 export type LedgerEntry = z.infer<typeof ledgerEntrySchema>;
 export type LedgerEntryType = z.infer<typeof ledgerEntryTypeSchema>;
+export type DepositAccount = z.infer<typeof depositAccountSchema>;
+export type DepositEntry = z.infer<typeof depositEntrySchema>;
+export type DepositEntryType = z.infer<typeof depositEntryTypeSchema>;
 
 export type WsTicket = z.infer<typeof wsTicketSchema>;
 export type ServerMessage = z.infer<typeof serverMessageSchema>;

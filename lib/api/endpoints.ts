@@ -5,6 +5,7 @@ import {
   auctionSchema,
   bidListSchema,
   bidResultSchema,
+  depositAccountSchema,
   detailSchema,
   lotCardListSchema,
   lotDetailSchema,
@@ -20,6 +21,7 @@ import type {
   AuctionStatus,
   Bid,
   BidResult,
+  DepositAccount,
   LotCard,
   LotDetail,
   LotSearchResult,
@@ -220,6 +222,18 @@ export function getMyAccount(
   params: { limit?: number; offset?: number } = {},
 ): Promise<ApiResult<Account>> {
   return apiRequest("/me/account", { schema: accountSchema, query: params });
+}
+
+/**
+ * What we HOLD as this bidder's security deposit — the number that decides
+ * whether they can bid. Deliberately a separate call from `getMyAccount`: the
+ * account balance answers "what do I owe", and conflating the two is how a
+ * screen tells someone their winnings have paid their deposit. They have not.
+ */
+export function getMyDeposit(
+  params: { limit?: number; offset?: number } = {},
+): Promise<ApiResult<DepositAccount>> {
+  return apiRequest("/me/deposit", { schema: depositAccountSchema, query: params });
 }
 
 /* ------------------------------------------------------------ realtime --- */

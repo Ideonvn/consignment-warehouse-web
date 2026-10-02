@@ -83,7 +83,7 @@ function Body({
     );
   }
 
-  if (outcome.kind === "insufficient-credit") {
+  if (outcome.kind === "deposit-required") {
     return <ShortfallPanel outcome={outcome} onClose={onClose} />;
   }
 

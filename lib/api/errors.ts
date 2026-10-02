@@ -38,16 +38,20 @@ export class BidTooLowError extends ApiError {
 }
 
 /**
- * 403 on a bid: the account is short of this auction's deposit.
+ * 403 on a bid: the deposit we hold is short of this auction's requirement.
  *
  * The numbers are typed rather than prose because this is the message that tells
- * someone HOW to become able to bid. `shortfallMinor` is authoritative and is
- * NOT `required - balance` — someone who owes money needs the debt cleared *and*
- * the deposit, and the server accounts for that.
+ * someone HOW to become able to bid.
+ *
+ * **`depositHeldMinor` is the deposit, not the account balance.** It was
+ * `balance_minor` until the deposit book was split out of the ledger on
+ * 2026-10-02 — renamed rather than aliased, because a field called "balance" on
+ * this body sends someone to their statement to fix a deposit problem. Owing
+ * money does not cause this refusal and paying it off does not clear it.
  */
-export class InsufficientCreditError extends ApiError {
+export class DepositRequiredError extends ApiError {
   readonly requiredMinor: number;
-  readonly balanceMinor: number;
+  readonly depositHeldMinor: number;
   readonly shortfallMinor: number;
   readonly currencyCode: string;
 
@@ -55,16 +59,16 @@ export class InsufficientCreditError extends ApiError {
     message: string,
     fields: {
       required_minor: number;
-      balance_minor: number;
+      deposit_held_minor: number;
       shortfall_minor: number;
       currency_code: string;
     },
     detail: unknown,
   ) {
     super(403, message, detail);
-    this.name = "InsufficientCreditError";
+    this.name = "DepositRequiredError";
     this.requiredMinor = fields.required_minor;
-    this.balanceMinor = fields.balance_minor;
+    this.depositHeldMinor = fields.deposit_held_minor;
     this.shortfallMinor = fields.shortfall_minor;
     this.currencyCode = fields.currency_code;
   }
@@ -151,13 +155,13 @@ export function toApiError(status: number, body: unknown, retryAfter: number | n
     if (
       typeof structured.shortfall_minor === "number" &&
       typeof structured.required_minor === "number" &&
-      typeof structured.balance_minor === "number"
+      typeof structured.deposit_held_minor === "number"
     ) {
-      return new InsufficientCreditError(
+      return new DepositRequiredError(
         message,
         {
           required_minor: structured.required_minor,
-          balance_minor: structured.balance_minor,
+          deposit_held_minor: structured.deposit_held_minor,
           shortfall_minor: structured.shortfall_minor,
           currency_code:
             typeof structured.currency_code === "string" ? structured.currency_code : "ZAR",

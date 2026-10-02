@@ -44,16 +44,26 @@ fight.
 
 **Bidders worth knowing about:**
 
-| Phone | Balance | Use it to test |
-|---|---|---|
-| `+27820000002/3/4` | R20 000 | Ordinary bidding, anywhere |
-| `+27820000013` | R5 000 exactly | The deposit boundary — *must* be allowed into Autumn Jewellery |
-| `+27820000014` | R4 999,99 | One cent short — *must* be refused, shortfall of 1c |
-| `+27820000034` | R0, no entries | An empty statement |
-| `+27820000015` | R11 400 | Every entry type on one statement |
-| `+27820000016` | R9 000 | A statement containing a correction |
-| `+27820000020` | **−R65 392,50** | The "owing" statement, with a won lot and its commission |
-| `+27820000032/33` | — | Suspended accounts |
+Two numbers per bidder now: the **deposit held** (what lets you bid) and the **balance** (what you
+owe). They move independently.
+
+| Phone | Deposit held | Balance | Use it to test |
+|---|---|---|---|
+| `+27820000002/3/4` | R20 000 | R0 | Ordinary bidding, anywhere |
+| `+27820000013` | R5 000 exactly | R0 | The deposit boundary — *must* be allowed into Autumn Jewellery |
+| `+27820000014` | R4 999,99 | R0 | One cent short — *must* be refused, shortfall of 1c |
+| `+27820000034` | R0 | R0 | Both books empty |
+| `+27820000035` | R5 000 | **owing** | **Owes money and can still bid** |
+| `+27820000036` | **R0** | in credit | **In credit and still refused** |
+| `+27820000037` | R0 | R0 | A deposit paid and returned |
+| `+27820000038` | R1 500 | R0 | A deposit book containing a correction |
+| `+27820000015` | R0 | in credit | Every ledger entry type on one statement |
+| `+27820000016` | R0 | in credit | A statement containing a correction |
+| `+27820000020` | R30 000 | **deep in owing** | The "owing" statement, with a won lot and its commission |
+| `+27820000032/33` | — | — | Suspended accounts |
+
+Balances on accounts that have won lots move with the seed's random bidding, so `SEED.md` in the
+backend repo is the authority on the exact figures.
 
 **Auctions:**
 
@@ -92,15 +102,22 @@ signalling it would hand rivals information.
 
 ## How your account works
 
-You have **one running balance**, not a wallet per auction. Positive is credit, negative means you
-owe. A deposit or a payment adds credit; winning a lot subtracts.
+**Two numbers, and they answer different questions.**
 
-R10 000 deposited then R12 000 won leaves you at **−R2 000** — you owe R2 000. Or pay the full
-R12 000 and keep R10 000 on account toward the next auction.
+Your **deposit** is what the warehouse holds for you. It is the only thing that decides whether you
+can bid. It is *held*, not spent — winning a lot never uses it up — and it comes back when you ask
+for it back.
 
-**Each auction says what you need on account before you can bid in it.** Bigger lots, bigger
-deposit. Standing credit makes you eligible for the next auction automatically, with no action by
-anyone.
+Your **balance** is the trading account: what you owe for lots you won, or credit sitting against
+the next invoice. Positive is credit, negative means you owe.
+
+So R10 000 of deposit lodged and then R12 000 won leaves the deposit at **R10 000** and the balance
+at **−R12 000**. You owe R12 000 and you can still bid. That is deliberate: a deposit is an entry
+ticket, not margin against each lot.
+
+**Each auction says what deposit you need to be holding before you can bid in it.** Bigger lots,
+bigger deposit. One deposit covers every auction asking for that much or less, and you are eligible
+the moment it is recorded, with no action by anyone.
 
 **Browsing is completely free.** The auction list, the card stack, swiping in *both* directions, lot
 detail and bid history all work with no deposit and no credit. The only thing gated is placing a
@@ -144,7 +161,7 @@ server decides it.
 | **Outbid** | Accepted, but a rival's ceiling is higher. Normal. Offers to raise. |
 | **Too low** | Someone bid between the screen loading and you confirming. The minimum updates. |
 | **Closed** | The clock ran out. |
-| **Not enough credit** | You have less on account than this auction requires. It tells you what you have, what is needed, and what to add. |
+| **Deposit needed** | The deposit we hold is less than this auction requires. It tells you what is held, what is needed, and what to pay in. It says nothing about what you owe, because that is not what is stopping you. |
 
 ### Lot detail
 
@@ -164,12 +181,15 @@ one-tap raise.
 
 ### Account
 
-Your statement, from Profile. The balance in plain language — *"R2 000 due"* or *"R10 000 on
-account"* — then every entry: what it was, when, the amount, and the balance after it. Charges and
-credits are distinct.
+From Profile. **The deposit comes first**: what is held, and every movement that got it there. Then
+the balance in plain language — *"R2 000 due"* or *"R10 000 on account"* — and the statement: what
+each entry was, when, the amount, and the balance after it. Charges and credits are distinct.
 
-A **correction** is a reversal of an earlier entry. It appears as its own line and is never netted
-away — the statement is a history.
+The two lists are separate because the two books are. A won lot never appears on the deposit list,
+and a deposit never appears on the statement.
+
+A **correction** is a reversal of an earlier entry, on either book. It appears as its own line and is
+never netted away — both are histories.
 
 If you owe money, that is an invoice, not an error. The screen also tells you how to pay.
 
@@ -292,45 +312,67 @@ number. Bidder one is told promptly.
 
 ## E. Deposits — the newest code
 
-**E1 — Sign in as `+27820000034`** (R0, no entries). Browse `autumn-jewellery-scheduled` once it
+**E1 — Sign in as `+27820000034`** (both books empty). Browse `autumn-jewellery-scheduled` once it
 opens: enter the stack, swipe **both** directions, open lot detail, read bid history.
 *Expect:* all of it works. Nothing blurred, blocked or nagging.
 
 **E2 — Try to bid.**
-*Expect:* refused with what you have, what the auction needs, and what to add — not "you are not
-eligible". Plus a route to your statement and a note on how to pay.
+*Expect:* refused with the deposit held, what the auction needs, and what to pay in — not "you are
+not eligible". Plus a route to your account and a note on how to pay. **No mention of what you owe**:
+that is not what is stopping you.
 
-**E3 — Sign in as `+27820000014`** (R4 999,99 against a R5 000 deposit) and try to bid.
+**E3 — Sign in as `+27820000014`** (holding R4 999,99 against a R5 000 deposit) and try to bid.
 *Expect:* refused with a shortfall of **one cent**.
 
-**E4 — Sign in as `+27820000013`** (exactly R5 000) and bid.
+**E4 — Sign in as `+27820000013`** (holding exactly R5 000) and bid.
 *Expect:* allowed. That boundary must match the admin Participants list exactly.
 
-**E5 — Have an admin record the missing cent for `+27820000014`**, then retry **in the same session
-without reloading**.
+**E5 — Have an admin record the missing cent of deposit for `+27820000014`**, then retry **in the
+same session without reloading**.
 *Expect:* the bid now succeeds.
 
-**E6 — Sign in as `+27820000002`** (R20 000) and bid in the same auction.
+**E6 — Sign in as `+27820000035`** — owes money, holds a R5 000 deposit — and bid in the same auction.
+*Expect:* **allowed.** Owing money does not gate bidding. This is the case the two books exist for.
+
+**E7 — Sign in as `+27820000036`** — in credit, no deposit — and try to bid.
+*Expect:* **refused.** Credit on the trading account is not a deposit. Check the card's deposit note
+says the deposit is not covered.
+
+**E8 — Sign in as `+27820000002`** (R20 000 deposit) and bid in the same auction.
 *Expect:* you never see any of this. No deposit messaging on the path to a bid.
 
-## F. Your statement
+## F. Your deposit and your statement
 
-**F1 — As `+27820000034`**, open the statement.
-*Expect:* an empty state, not a broken screen.
+**F1 — As `+27820000034`**, open Account.
+*Expect:* a deposit of zero with an honest line about what that means, and an empty statement. Not a
+broken screen.
 
-**F2 — As `+27820000015`**, open it.
-*Expect:* every entry type, human labels — "Lot won", "Commission", not raw names. Charges and
-credits distinct.
+**F2 — As `+27820000002`**, open Account.
+*Expect:* the deposit **above** the balance, with its own list of movements. A won lot never appears
+on the deposit list.
 
-**F3 — As `+27820000016`.**
+**F3 — As `+27820000038`**, open Account.
+*Expect:* a correction on the **deposit** list, shown as its own line and not netted away. The held
+figure reflects only the entry that stands.
+
+**F4 — As `+27820000037`**, open Account.
+*Expect:* a deposit received and then returned, both visible, nothing held now.
+
+**F5 — As `+27820000015`**, open it.
+*Expect:* human labels on the statement — "Lot won", "Commission", not raw names. Charges and credits
+distinct. **No deposit line on the statement**: deposits are not recorded there any more.
+
+**F6 — As `+27820000016`.**
 *Expect:* the correction shown as its own line, **not** netted against what it corrects.
 
-**F4 — As `+27820000020`** (−R65 392,50).
+**F7 — As `+27820000020`** (deep in owing, and holding a deposit).
 *Expect:* the balance stated as **due**, in plain language. A won lot and a **separate** commission
-line. It should read as an invoice, not an error.
+line. It should read as an invoice, not an error — and the deposit above it should be untouched by
+any of it.
 
-**F5 — Page the statement.**
-*Expect:* the running balance **continues** across the page break rather than restarting.
+**F8 — Page the statement.**
+*Expect:* the running balance **continues** across the page break rather than restarting. Same for
+the deposit list.
 
 ## G. Timing
 

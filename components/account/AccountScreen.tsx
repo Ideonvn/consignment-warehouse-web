@@ -1,10 +1,10 @@
 "use client";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { getMyAccount } from "@/lib/api/endpoints";
-import { describeBalance, entryLabel } from "@/lib/format/account";
+import { getMyAccount, getMyDeposit } from "@/lib/api/endpoints";
+import { describeBalance, depositEntryLabel, entryLabel } from "@/lib/format/account";
 import { formatDateTime } from "@/lib/format/time";
-import type { LedgerEntry } from "@/types/api";
+import type { DepositEntry, LedgerEntry } from "@/types/api";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -56,9 +56,15 @@ export function AccountScreen() {
     <PhoneColumn className="pb-8">
       <ScreenHeader title="Account" backHref="/profile" />
 
+      {/* The deposit comes first, because it is the number that answers "can I
+          bid". The balance below answers "what do I owe", and the two move
+          independently — winning a lot charges the balance and never touches the
+          deposit. */}
+      <DepositSection />
+
       <section
         className={cn(
-          "rounded-card border p-5",
+          "mt-4 rounded-card border p-5",
           standing.tone === "due" ? "border-danger/40 bg-danger/5" : "border-border bg-surface",
         )}
       >
@@ -82,11 +88,14 @@ export function AccountScreen() {
       <h2 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-text-muted uppercase">
         Statement
       </h2>
+      <p className="mb-2 text-xs text-text-muted">
+        Lots you have won and what you have paid against them. Deposits are above.
+      </p>
 
       {entries.length === 0 ? (
         <EmptyState
           title="Nothing on your account yet"
-          description="Deposits, payments and lots you win all show up here."
+          description="Lots you win, and payments against them, all show up here."
         />
       ) : (
         <ul className="flex flex-col">
@@ -110,6 +119,110 @@ export function AccountScreen() {
         </Button>
       ) : null}
     </PhoneColumn>
+  );
+}
+
+/**
+ * The security deposit: what we hold, and every movement that got it there.
+ *
+ * A separate query and a separate list from the statement, deliberately. It is a
+ * different book on the server, it answers a different question, and merging the
+ * two into one history is how "you won a lot" starts reading as "your deposit was
+ * spent". It was not — a deposit is held until it is returned.
+ *
+ * Failures here are quiet. The statement below is the screen's reason for
+ * existing, and a deposit call that fails must not take it down with it.
+ */
+function DepositSection() {
+  const { data, isPending, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ["deposit"],
+      queryFn: ({ pageParam }) => getMyDeposit({ limit: PAGE_SIZE, offset: pageParam }),
+      initialPageParam: 0,
+      getNextPageParam: (lastPage, allPages) =>
+        lastPage.meta.hasMore ? allPages.length * PAGE_SIZE : undefined,
+    });
+
+  if (isPending) {
+    return <Skeleton className="h-28 w-full rounded-card" />;
+  }
+  if (error || !data) return null;
+
+  // The held figure is the same on every page; the first is as good as any.
+  const { held_minor: held, currency_code: currency } = data.pages[0].data;
+  const entries = data.pages.flatMap((page) => page.data.entries);
+
+  return (
+    <>
+      <section className="rounded-card border border-border bg-surface p-5">
+        <p className="text-xs tracking-wide text-text-muted uppercase">Deposit held</p>
+        <p className="mt-1 text-4xl font-semibold text-accent-text">
+          <Money minor={held} currency={currency} />
+        </p>
+        <p className="mt-2 text-sm text-text-muted">
+          {held > 0
+            ? "Held as your deposit, not spent. It lets you bid in any auction asking for this much or less, and winning a lot never uses it up."
+            : "You have no deposit with us, so auctions that ask for one will refuse a bid. Pay one in and you can bid straight away."}
+        </p>
+      </section>
+
+      {entries.length > 0 ? (
+        <>
+          <h2 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-text-muted uppercase">
+            Deposit movements
+          </h2>
+          <ul className="flex flex-col">
+            {entries.map((entry) => (
+              <li key={entry.id}>
+                <DepositRow entry={entry} />
+              </li>
+            ))}
+          </ul>
+          {hasNextPage ? (
+            <Button
+              variant="ghost"
+              fullWidth
+              className="mt-3"
+              loading={isFetchingNextPage}
+              onClick={() => void fetchNextPage()}
+            >
+              Show earlier deposit entries
+            </Button>
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function DepositRow({ entry }: { entry: DepositEntry }) {
+  // Signed by the server: negative is money going back out to them.
+  const isOut = entry.amount_minor < 0;
+
+  return (
+    <article className="flex items-start justify-between gap-3 border-b border-border py-3 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{depositEntryLabel(entry.entry_type)}</p>
+        {entry.description ? (
+          <p className="mt-0.5 truncate text-sm text-text-muted">{entry.description}</p>
+        ) : null}
+        <p className="mt-0.5 text-xs text-text-muted">
+          {formatDateTime(entry.created_at)}
+          {entry.reference ? ` · ${entry.reference}` : ""}
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className={cn("text-sm font-semibold", isOut ? "text-danger" : "text-success")}>
+          {isOut ? "−" : "+"}
+          <Money minor={Math.abs(entry.amount_minor)} currency={entry.currency_code} />
+        </p>
+        <p className="mt-0.5 text-xs text-text-muted">
+          {/* Server-accumulated and continued across pages; shown as given. */}
+          Held <Money minor={entry.held_after_minor} currency={entry.currency_code} />
+        </p>
+      </div>
+    </article>
   );
 }
 

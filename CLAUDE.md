@@ -145,7 +145,7 @@ is not rendered as an element (an `aria-label`, say) goes through `formatMoney`,
 
 **One retry rule, in `app/providers.tsx`, and nowhere else.** A 4xx is the server having considered
 the request and declined it: retrying asks the same question and expects a different answer. That
-one sentence covers the 404 on a private auction, the 403 for a deposit not yet paid, the 409 on a
+one sentence covers the 404 on a private auction, the 403 for a deposit not yet held, the 409 on a
 lot that has closed, and the 422 and 429 on search. `SessionExpiredError` is checked first because
 it does not necessarily carry a status of its own.
 
@@ -920,17 +920,37 @@ and autofill follow. `viewport.themeColor` can only vary by media query, which f
 explicit Light choice on a dark OS keeps a black status bar. The theme change is deliberately not
 animated: a whole-page cross-fade is jarring and costly.
 
-## Bidder accounts
+## Bidder accounts — two books since 2026-10-02
 
-Every bidder has **one running balance**, not a wallet per auction. Positive means credit, negative
-means they owe. A deposit or a payment adds credit; winning a lot subtracts. R10 000 deposited then
-R12 000 won leaves them at **−R2 000** — they owe R2 000, or they can pay the R12 000 and keep the
-R10 000 on account for the next auction. Standing credit makes someone eligible for the next
-auction automatically, with no action by anyone.
+**A bidder has TWO numbers, and conflating them is the bug this section exists to
+prevent.**
 
-Each auction carries `deposit_amount_minor` — what must be on account before bidding *in that
-auction*. `GET /me/account` returns the caller's own statement, paginated, and there is no route to
-anyone else's.
+`held_minor` from `GET /me/deposit` is the **security deposit**: what the warehouse holds, and the
+*only* thing that decides whether a bid is allowed. It goes up when a deposit is received and down
+when one is returned. Nothing else moves it — winning a lot cannot.
+
+`balance_minor` from `GET /me/account` is the **trading account**: what they owe for lots they won,
+and what they have paid against it. Positive is credit, negative is owing.
+
+They are independent. Someone can **owe money and still bid**, and be **in credit and still be
+refused**. R10 000 of deposit lodged then R12 000 won leaves the deposit at R10 000 and the balance
+at −R12 000: they owe R12 000 and they can still bid. Before the split these were one number, and a
+winner's charges ate the deposit that had admitted them to the sale.
+
+So: **anything about being able to bid reads the deposit; anything about money owed reads the
+balance.** A screen that answers one question with the other number is wrong even when the numbers
+happen to agree. `DepositNote` on the auction card, the bid-refusal panel and the eligibility hint
+all read the deposit. The statement and the win modal read the balance.
+
+Each auction carries `deposit_amount_minor` — what must be **held** before bidding *in that
+auction*. One deposit covers every auction whose requirement it meets; it is not ring-fenced per
+sale. Both `GET /me/deposit` and `GET /me/account` return the caller's own book, paginated, and
+there is no route to anyone else's.
+
+`LedgerEntryType.deposit` is **retired**: the backend refuses a new one, and the member survives in
+`ledgerEntryTypeSchema` only so entries posted before the split still render. Deposit entries have
+their own type (`paid`/`refunded`/`reversal`) and their own labels in
+`lib/format/account.ts` — `depositEntryLabel`, kept separate from `entryLabel` on purpose.
 
 **Browsing is deliberately ungated.** The auction list, the lot list, lot detail and bid history
 all work with no deposit and no credit. The gate is only on placing a bid. Do not add a gate, a blur
@@ -945,17 +965,24 @@ backend's doing.
 
 **Eligibility is the server's decision.** Show the requirement, but never compute eligibility
 client-side as the source of truth — always handle the 403. It arrives typed
-(`InsufficientCreditError`) with `required_minor`, `balance_minor`, `shortfall_minor` and
-`currency_code`.
+(`DepositRequiredError`) with `required_minor`, `deposit_held_minor`, `shortfall_minor` and
+`currency_code`. The field was `balance_minor` until the split; it was **renamed, not aliased**, and
+the parser in `lib/api/errors.ts` keys off the new name — a body carrying the old one no longer
+produces a typed error at all, which is the correct failure rather than a silently wrong panel.
 
-**Render `shortfall_minor`; never compute `required − balance`.** It is not clamped to the deposit:
-someone who owes R250 against a R10 000 deposit needs R10 250, and the server says so. Computing it
-locally quietly under-quotes anyone in debt.
+**Render `shortfall_minor`; never compute it.** The server owns it, and there must be one place that
+shows it. The refusal panel deliberately says nothing about what the bidder owes: paying off a debt
+does not clear this refusal, and offering it as the remedy would waste someone's afternoon.
 
 **A negative balance is an invoice, not an error state.** These are customers who have just won
 something. `lib/format/account.ts` turns the signed number into plain language ("R2 000 due" /
 "R2 000 on account") because "−200000" is not usable. It also maps `entry_type` to human labels —
 `lot_won` is "Lot won", `commission` is "Commission", `reversal` is "Correction".
+
+**The account screen shows the deposit first and the statement second**, and `AccountSummaryLink`
+shows both lines with the deposit leading. "Why can't I bid" is the commoner question and the balance
+is never its answer. The deposit list is its own query, and it fails **quietly** — the statement is
+the screen's reason for existing and must not be taken down by a deposit call that errors.
 
 **A `reversal` is shown as its own line and never netted against the entry it corrects.** The
 statement is a history; an entry that silently vanishes is worse than one that is explained. The

@@ -49,8 +49,8 @@ export function AuctionInfoSheet({ auction }: { auction: Auction }) {
                     currency={auction.currency_code}
                     className="font-semibold"
                   />{" "}
-                  must be on your account before you can bid in this auction. Browsing needs
-                  nothing.
+                  must be held as your deposit before you can bid in this auction. It is held,
+                  not spent — winning a lot never uses it up. Browsing needs nothing.
                 </>
               ) : (
                 <>No deposit is needed to bid in this auction.</>

@@ -10,24 +10,30 @@ import { cn } from "@/lib/utils/cn";
 
 /*
  * What a placed bid can land on, lifted out of `BidSheet` so the one-tap path
- * shows the same panels instead of a second copy of them. The shortfall figures
- * especially: `shortfall_minor` is server-computed and is never
- * `required - balance`, so there must be exactly one place that renders it.
+ * shows the same panels instead of a second copy of them. The shortfall figure
+ * especially: it is server-computed, so there must be exactly one place that
+ * renders it.
  */
 
 export /**
- * The refusal. It has to say what they have, what this auction needs and what to
+ * The refusal. It has to say what we hold, what this auction needs and what to
  * add — "you are not eligible" tells someone nothing they can act on.
+ *
+ * **This is about the deposit, never the balance.** They are separate books: a
+ * bidder can owe us money and still be allowed to bid, so nothing here mentions
+ * what they owe and the call to action is a deposit, not a payment. Showing a
+ * balance on this panel would send someone to settle an invoice that will not
+ * change the answer.
  */
 function ShortfallPanel({
   outcome,
   onClose,
 }: {
-  outcome: Extract<BidOutcome, { kind: "insufficient-credit" }>;
+  outcome: Extract<BidOutcome, { kind: "deposit-required" }>;
   onClose: () => void;
 }) {
   const currency = outcome.currencyCode;
-  const owes = outcome.balanceMinor < 0;
+  const nothingHeld = outcome.depositHeldMinor <= 0;
 
   return (
     <div className="px-5 pt-2 pb-6">
@@ -35,10 +41,9 @@ function ShortfallPanel({
 
       <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-border bg-surface-raised p-4 text-sm">
         <p className="flex items-baseline justify-between gap-3">
-          <span className="text-text-muted">You have</span>
-          <span className={cn("font-semibold", owes ? "text-danger" : "text-text")}>
-            <Money minor={Math.abs(outcome.balanceMinor)} currency={currency} />
-            {owes ? " due" : " on account"}
+          <span className="text-text-muted">Deposit we hold</span>
+          <span className={cn("font-semibold", nothingHeld ? "text-text-muted" : "text-text")}>
+            <Money minor={outcome.depositHeldMinor} currency={currency} />
           </span>
         </p>
         <p className="flex items-baseline justify-between gap-3">
@@ -48,9 +53,8 @@ function ShortfallPanel({
           </span>
         </p>
         <p className="mt-1 flex items-baseline justify-between gap-3 border-t border-border pt-3">
-          <span className="font-medium">Add</span>
-          {/* Server-computed: someone who owes needs the debt cleared as well as
-              the deposit, so this is never `required - balance`. */}
+          <span className="font-medium">Pay in</span>
+          {/* Server-computed; rendered exactly as given. */}
           <span className="text-lg font-semibold text-accent-text">
             <Money minor={outcome.shortfallMinor} currency={currency} />
           </span>
@@ -58,6 +62,11 @@ function ShortfallPanel({
       </div>
 
       <PaymentDetails className="mt-3" />
+
+      <p className="mt-3 text-xs text-text-muted">
+        A deposit is held, not spent. It stays yours and covers every auction that
+        asks for this much or less — winning a lot never uses it up.
+      </p>
 
       <div className="mt-6 flex flex-col gap-2">
         <Link
