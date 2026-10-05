@@ -998,6 +998,28 @@ reference is one the operator has to chase.
 Payment is arranged manually with the operator today; there is no payment flow in the product. The
 fallback is an honest "contact the warehouse" line rather than invented bank details.
 
+## Closing an account
+
+`DELETE /auth/me` from Profile, in `components/profile/DeleteAccount.tsx`. Last on the screen,
+after signing out, because it is the only irreversible action there — and required to be reachable
+in-app by both app stores.
+
+**The copy says what happens rather than asking "are you sure?"**, because a confirmation nobody
+can act on is only a speed bump. It also does **not** claim everything is deleted, and that is a
+correctness matter rather than a tone one: bids and ledger entries are financial records the law
+requires keeping, six RESTRICT foreign keys mean the backend could not remove them anyway, and the
+honest wording is a "what is removed / what is kept" pair. Do not simplify it to "your data is
+deleted".
+
+**The 409 is typed** (`AccountNotDeletableError`) and carries every blocker at once —
+`balance_minor` either way, `deposit_held_minor`, `live_bid_count`. The sheet renders whichever are
+non-zero, because the server sends them together precisely so nobody comes back twice. In credit
+counts as a blocker: that is money owed to the bidder, and the copy says to ask for it back rather
+than implying it is forfeited.
+
+On success the token is dead immediately, so nothing is retried: disconnect the socket, clear the
+query cache, end the session, replace to `/login`. In that order.
+
 ## Email verification and marketing consent
 
 Both live on `/profile` and both read from the session user, which is replaced by whatever the

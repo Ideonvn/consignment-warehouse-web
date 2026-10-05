@@ -236,6 +236,17 @@ export function getMyDeposit(
   return apiRequest("/me/deposit", { schema: depositAccountSchema, query: params });
 }
 
+/**
+ * Close the caller's own account. Irreversible, and refused with a typed 409 while anything is
+ * outstanding — see `AccountNotDeletableError`.
+ *
+ * 204, so no schema is passed — `apiRequest` short-circuits before parsing and there is no body
+ * to validate.
+ */
+export async function deleteMe(): Promise<void> {
+  await apiRequest("/auth/me", { method: "DELETE" });
+}
+
 /* ------------------------------------------------------------ realtime --- */
 
 export function createWsTicket(): Promise<WsTicket> {

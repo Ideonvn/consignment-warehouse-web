@@ -75,6 +75,38 @@ export class DepositRequiredError extends ApiError {
 }
 
 /**
+ * 409 on `DELETE /auth/me`: something is still outstanding on the account.
+ *
+ * Carries EVERY blocker at once rather than the first one hit — a user told to settle a debt who
+ * comes back and is then told about a deposit has made the round trip twice for no reason. The
+ * screen renders whichever of these is non-zero.
+ */
+export class AccountNotDeletableError extends ApiError {
+  readonly balanceMinor: number;
+  readonly depositHeldMinor: number;
+  readonly liveBidCount: number;
+  readonly currencyCode: string;
+
+  constructor(
+    message: string,
+    fields: {
+      balance_minor: number;
+      deposit_held_minor: number;
+      live_bid_count: number;
+      currency_code: string;
+    },
+    detail: unknown,
+  ) {
+    super(409, message, detail);
+    this.name = "AccountNotDeletableError";
+    this.balanceMinor = fields.balance_minor;
+    this.depositHeldMinor = fields.deposit_held_minor;
+    this.liveBidCount = fields.live_bid_count;
+    this.currencyCode = fields.currency_code;
+  }
+}
+
+/**
  * A field can no longer be changed (e.g. once bidding has started). Declared by
  * the backend as `FrozenFieldOut`: `{detail: {message, field}}`. Admin-only in
  * practice, so it should rarely reach this client at all.
@@ -163,6 +195,24 @@ export function toApiError(status: number, body: unknown, retryAfter: number | n
           required_minor: structured.required_minor,
           deposit_held_minor: structured.deposit_held_minor,
           shortfall_minor: structured.shortfall_minor,
+          currency_code:
+            typeof structured.currency_code === "string" ? structured.currency_code : "ZAR",
+        },
+        detail,
+      );
+    }
+
+    if (
+      typeof structured.live_bid_count === "number" &&
+      typeof structured.balance_minor === "number" &&
+      typeof structured.deposit_held_minor === "number"
+    ) {
+      return new AccountNotDeletableError(
+        message,
+        {
+          balance_minor: structured.balance_minor,
+          deposit_held_minor: structured.deposit_held_minor,
+          live_bid_count: structured.live_bid_count,
           currency_code:
             typeof structured.currency_code === "string" ? structured.currency_code : "ZAR",
         },

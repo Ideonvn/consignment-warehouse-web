@@ -16,6 +16,7 @@ import { ThemeSetting } from "@/components/theme/ThemeSetting";
 import { AccountSummaryLink } from "@/components/account/AccountSummaryLink";
 import { EmailVerification } from "@/components/profile/EmailVerification";
 import { MarketingPreferences } from "@/components/profile/MarketingPreferences";
+import { DeleteAccount } from "@/components/profile/DeleteAccount";
 
 export function ProfileScreen() {
   const router = useRouter();
@@ -126,6 +127,12 @@ export function ProfileScreen() {
       <p className="mt-6 text-center text-xs text-text-muted">
         Other bidders only ever see a handle like Bidder 872072 — never your name or number.
       </p>
+
+      {/* Last on the screen, after signing out, because it is the one action here that cannot be
+          undone. Required to be reachable in-app by both app stores. */}
+      <div className="mt-8 border-t border-border pt-6">
+        <DeleteAccount />
+      </div>
     </PhoneColumn>
   );
 }
