@@ -1575,15 +1575,29 @@ Team ID: if the app ever moves to one, `app/.well-known/apple-app-site-associati
 be refilled and the site redeployed, and universal links stay broken in between with no error
 anywhere. Anyone reading that value should treat it as refillable, not fixed.
 
-### Still outstanding: the Android fingerprint, after the first Play upload
+### Done: the Android fingerprints, 2026-10-06
 
-| Placeholder | Where it comes from |
-|---|---|
-| `ANDROID_SHA256_CERT_FINGERPRINT` | The SHA-256 fingerprint of the certificate that signs **the build Play serves**, as 32 colon-separated hex pairs. With Play App Signing that is **Play's own app signing key, which does not exist until the first upload** — afterwards, Play Console → Test and release → App integrity → App signing key certificate. The EAS *upload* key (`eas credentials`, Android → production → Keystore) is a different fingerprint, and listing both is normal, so a build installed straight from EAS verifies too. |
+Both read off **Play Console → Protected with Play → Play Store distribution → Play app
+signing**. ⚠️ Note the menu — this file previously said *Test and release → App integrity*, and
+that path has moved.
 
-Filled in, the Android file's `sha256_cert_fingerprints` becomes a list like
-`["49:F3:E7:32:…:FD:71", "54:69:33:CA:…:93:63"]`. Nothing else in that file changes: the claimed
-paths and the package name are already right.
+| Entry | Which key | Why it is listed |
+|---|---|---|
+| 1st | **Play app signing key** | Google's own, created at the first upload. Signs the APK a user installs **from the store**. Identified by being the fingerprint in the ready-made *Digital Asset Links JSON* snippet Google renders on that page. |
+| 2nd | **Upload key** | Ours, under the heading *Upload key certificate*. What EAS signs with so Google knows a release is from us. Listed only so a build installed **straight from EAS** verifies too. |
+
+⚠️ **The two sections sit on one screen and the headings read alike.** This file briefly carried
+the **upload key alone, labelled as the app signing key**, which verifies nothing for anybody who
+installed from the store — and fails silently, so nothing would have reported it. The reliable
+tell is the *Digital Asset Links JSON* snippet: Google builds it from the app signing key, so
+whatever is in there is the one a store install needs.
+
+For a build signed by anything else, read the value off the artefact rather than a screen:
+`apksigner verify --print-certs <build>.apk`. The certificate that signed the file is the only
+thing Android compares against.
+
+Nothing else in `route.ts` changed: the claimed paths and the package name were already right,
+and the package matches `app.json`'s `android.package` in the mobile repo.
 
 ### How to verify after a deploy
 
