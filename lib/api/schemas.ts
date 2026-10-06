@@ -33,7 +33,18 @@ export const userSchema = z.object({
   email_bounced_at: z.string().nullable(),
   /** Empty means never asked — which is not the same as having declined. */
   notification_preferences: z.array(notificationPreferenceSchema).default([]),
-  /** What the bidder quotes when paying. Shown wherever we ask them to pay. */
+  /**
+   * The bidder's own ID or passport number. Present on this shape only — it is
+   * `/auth/me`, so the only person who can read it is the person it belongs to.
+   * It exists because the invoice design prints it; nothing in the app gates on
+   * it, and null is an ordinary state.
+   */
+  id_number: z.string().nullable(),
+  /**
+   * What the bidder quotes when paying money ONTO their account — a deposit or
+   * a top-up. Not what an invoice asks for: an invoice says to quote its own
+   * number, so that one bank line maps to one document.
+   */
   payment_reference: z.string().nullable(),
   status: z.enum(["active", "suspended", "deleted"]),
   role: z.enum(["bidder", "admin", "superadmin"]),
@@ -309,6 +320,58 @@ export const depositAccountSchema = z.object({
   held_minor: z.number(),
   currency_code: z.string(),
   entries: z.array(depositEntrySchema),
+});
+
+/* ------------------------------------------------------------ invoices --- */
+
+/**
+ * **Derived on the server, never stored.** There is no status column on an
+ * invoice — it is computed from the allocations and the clock on every read, in
+ * one precedence order: paid beats overdue, overdue beats part-paid. Render it;
+ * a screen that worked it out from `paid_minor` and `due_at` would eventually
+ * disagree with the server about a document the bidder is looking at.
+ */
+export const invoiceStatusSchema = z.enum(["unpaid", "part_paid", "paid", "overdue"]);
+
+/**
+ * One printed line. Amounts are **positive magnitudes** — the same charges are
+ * negative on the statement above, because there they reduce a balance; on a
+ * document they are amounts owed, and a minus sign there reads as a credit.
+ */
+export const invoiceLineSchema = z.object({
+  position: z.number(),
+  description: z.string(),
+  lot_id: z.string().nullable(),
+  net_minor: z.number(),
+  tax_minor: z.number(),
+  gross_minor: z.number(),
+  tax_rate_bps: z.number(),
+});
+
+export const invoiceSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  auction_id: z.string(),
+  issued_at: z.string(),
+  due_at: z.string(),
+  currency_code: z.string(),
+  subtotal_minor: z.number(),
+  tax_minor: z.number(),
+  total_minor: z.number(),
+  /**
+   * Empty means we were not a registered vendor when this was issued, so it is
+   * an "Invoice" rather than a "Tax invoice". A SNAPSHOT, not today's setting.
+   */
+  vat_number: z.string(),
+  tax_rate_bps: z.number(),
+  paid_minor: z.number(),
+  status: invoiceStatusSchema,
+});
+
+export const invoiceListSchema = z.array(invoiceSchema);
+
+export const invoiceDetailSchema = invoiceSchema.extend({
+  lines: z.array(invoiceLineSchema),
 });
 
 /* ------------------------------------------------------------ realtime --- */

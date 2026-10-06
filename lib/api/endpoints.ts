@@ -1,4 +1,9 @@
-import { apiGet, apiRequest, type ApiResult } from "@/lib/api/client";
+import {
+  apiGet,
+  apiRequest,
+  apiRequestBlob,
+  type ApiResult,
+} from "@/lib/api/client";
 import {
   accountSchema,
   auctionListSchema,
@@ -7,6 +12,8 @@ import {
   bidResultSchema,
   depositAccountSchema,
   detailSchema,
+  invoiceDetailSchema,
+  invoiceListSchema,
   lotCardListSchema,
   lotDetailSchema,
   lotSearchResultListSchema,
@@ -22,6 +29,8 @@ import type {
   Bid,
   BidResult,
   DepositAccount,
+  Invoice,
+  InvoiceDetail,
   LotCard,
   LotDetail,
   LotSearchResult,
@@ -75,6 +84,8 @@ export function updateMe(input: {
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
+  /** Free text, deliberately: a passport number is a legitimate answer. */
+  id_number?: string | null;
 }): Promise<User> {
   return apiGet("/auth/me", { method: "PATCH", body: input, schema: userSchema });
 }
@@ -245,6 +256,42 @@ export function getMyDeposit(
  */
 export async function deleteMe(): Promise<void> {
   await apiRequest("/auth/me", { method: "DELETE" });
+}
+
+/* ------------------------------------------------------------ invoices --- */
+
+/**
+ * The caller's own invoices, newest first.
+ *
+ * **Scoped to the token by construction**, exactly like `/me/account` and
+ * `/me/deposit`: there is no user id in the path and no parameter that could
+ * name another person, so there is no filter here that could be forgotten.
+ *
+ * More than one invoice for a single sale is normal, not a duplicate. An
+ * invoice covers the charges that were unbilled when it was raised, so a
+ * reserve accepted days after the auction closes becomes a second document
+ * rather than an edit to the first — an issued invoice never changes.
+ */
+export function getMyInvoices(
+  params: { limit?: number; offset?: number } = {},
+): Promise<ApiResult<Invoice[]>> {
+  return apiRequest("/me/invoices", { schema: invoiceListSchema, query: params });
+}
+
+export function getMyInvoice(invoiceId: string): Promise<InvoiceDetail> {
+  return apiGet(`/me/invoices/${invoiceId}`, { schema: invoiceDetailSchema });
+}
+
+/**
+ * The document itself, as bytes.
+ *
+ * Streamed through the API rather than redirected to a presigned URL, so this
+ * cannot be a link — see `apiRequestBlob`. It is the same file the operator
+ * sees: one renderer, one stored object, no second version of a document that
+ * could differ from the one in the customer's hands.
+ */
+export function getMyInvoicePdf(invoiceId: string): Promise<Blob> {
+  return apiRequestBlob(`/me/invoices/${invoiceId}/pdf`);
 }
 
 /* ------------------------------------------------------------ realtime --- */

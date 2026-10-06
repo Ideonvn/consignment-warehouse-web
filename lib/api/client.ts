@@ -174,6 +174,54 @@ export async function apiRequest<T>(
   return { data: parsed.data, meta };
 }
 
+/**
+ * Raw bytes, for the invoice PDF.
+ *
+ * It has to be a fetch rather than an `<a href>` because the document is
+ * **streamed through the API, not served from a presigned URL** — a presigned
+ * link is a bearer capability that survives being forwarded, and an invoice
+ * names a person and what they owe. So the request carries the bearer token,
+ * and that means going through the same single-flight refresh as everything
+ * else here.
+ *
+ * Deliberately a small separate function rather than a flag on `apiRequest`:
+ * that one's whole contract is "parse the body against a schema", and a branch
+ * that skips the parse would make the return type a lie on every other call.
+ */
+export async function apiRequestBlob(path: string): Promise<Blob> {
+  const url = buildUrl(path);
+  const send = (token: string | null) =>
+    rawFetch(url, {
+      method: "GET",
+      headers: token ? { Accept: "*/*", Authorization: `Bearer ${token}` } : { Accept: "*/*" },
+    });
+
+  let token = getAccessToken();
+  if (!token) {
+    token = await refreshAccessToken();
+    if (!token) throw new SessionExpiredError();
+  }
+
+  let res = await send(token);
+  if (res.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) throw new SessionExpiredError();
+    res = await send(refreshed);
+    if (res.status === 401) {
+      useSession.getState().endSession();
+      throw new SessionExpiredError();
+    }
+  }
+
+  if (!res.ok) {
+    // An error body is JSON whatever the request asked for, so it is read as
+    // JSON here — reading it as bytes would lose the detail worth showing.
+    const payload = await res.json().catch(() => null);
+    throw toApiError(res.status, payload, readRetryAfter(res));
+  }
+  return res.blob();
+}
+
 /** Convenience wrapper for the common case where pagination headers don't matter. */
 export async function apiGet<T>(path: string, options: RequestOptions<T> = {}): Promise<T> {
   const { data } = await apiRequest<T>(path, options);

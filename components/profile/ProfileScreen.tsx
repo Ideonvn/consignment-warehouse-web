@@ -29,6 +29,7 @@ export function ProfileScreen() {
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+  const [idNumber, setIdNumber] = useState(user?.id_number ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -42,6 +43,7 @@ export function ProfileScreen() {
           first_name: firstName.trim() || null,
           last_name: lastName.trim() || null,
           email: email.trim() || null,
+          id_number: idNumber.trim() || null,
         }),
       );
       showToast({ title: "Profile saved", tone: "success" });
@@ -98,6 +100,20 @@ export function ProfileScreen() {
             response — so changing an address shows as unverified immediately
             rather than keeping a stale tick until the next fetch. */}
         <EmailVerification />
+        {/* Optional, and nothing in the product gates on it. The hint says what
+            it is actually for rather than implying a verification step that
+            does not exist — and says plainly that it lands on a document,
+            because an invoice cannot be unprinted. Not `type="number"`: a
+            passport number is a legitimate answer and a leading zero on an SA
+            ID is significant. */}
+        <Input
+          label="ID or passport number (optional)"
+          inputMode="text"
+          autoComplete="off"
+          value={idNumber}
+          onChange={(event) => setIdNumber(event.target.value)}
+          hint="Printed on your invoices, which the warehouse needs for its records. Leave it blank and your invoices simply omit the row."
+        />
         <Button onClick={save} loading={saving} fullWidth>
           Save changes
         </Button>

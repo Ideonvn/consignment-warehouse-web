@@ -12,6 +12,7 @@ import { Money } from "@/components/ui/Money";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PhoneColumn } from "@/components/layout/PhoneColumn";
 import { PaymentDetails } from "@/components/account/PaymentDetails";
+import { InvoicesSection } from "@/components/invoices/InvoicesSection";
 import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { cn } from "@/lib/utils/cn";
 
@@ -118,6 +119,13 @@ export function AccountScreen() {
           Show earlier entries
         </Button>
       ) : null}
+
+      {/* Invoices last. The BALANCE above is the authoritative answer to "what
+          do I owe"; an invoice is a document covering a subset of the charges
+          behind it, so an unpaid invoice alongside a settled balance just means
+          a payment landed on account without being applied to that document.
+          Deposit → balance → invoices is the order the questions arrive in. */}
+      <InvoicesSection />
     </PhoneColumn>
   );
 }

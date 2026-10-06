@@ -9,6 +9,10 @@ import type {
   depositAccountSchema,
   depositEntrySchema,
   depositEntryTypeSchema,
+  invoiceDetailSchema,
+  invoiceLineSchema,
+  invoiceSchema,
+  invoiceStatusSchema,
   lotCardSchema,
   lotDetailSchema,
   lotImageSchema,
@@ -72,6 +76,16 @@ export type LedgerEntryType = z.infer<typeof ledgerEntryTypeSchema>;
 export type DepositAccount = z.infer<typeof depositAccountSchema>;
 export type DepositEntry = z.infer<typeof depositEntrySchema>;
 export type DepositEntryType = z.infer<typeof depositEntryTypeSchema>;
+
+/**
+ * An invoice as its recipient sees it. There is no `user_id` and no
+ * `bill_to_name` on this shape — the caller already knows who they are, and the
+ * endpoint is scoped to them by construction.
+ */
+export type Invoice = z.infer<typeof invoiceSchema>;
+export type InvoiceDetail = z.infer<typeof invoiceDetailSchema>;
+export type InvoiceLine = z.infer<typeof invoiceLineSchema>;
+export type InvoiceStatus = z.infer<typeof invoiceStatusSchema>;
 
 export type WsTicket = z.infer<typeof wsTicketSchema>;
 export type ServerMessage = z.infer<typeof serverMessageSchema>;

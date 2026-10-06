@@ -16,6 +16,7 @@ export function WelcomeForm() {
 
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
+  const [idNumber, setIdNumber] = useState(user?.id_number ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -33,6 +34,7 @@ export function WelcomeForm() {
         await updateMe({
           first_name: firstName.trim(),
           last_name: lastName.trim() === "" ? null : lastName.trim(),
+          id_number: idNumber.trim() === "" ? null : idNumber.trim(),
         }),
       );
       router.replace(next);
@@ -65,6 +67,20 @@ export function WelcomeForm() {
             autoComplete="family-name"
             value={lastName}
             onChange={(event) => setLastName(event.target.value)}
+          />
+          {/* Asked here because signing up is the one moment someone is willing to type it,
+              and an invoice that has to print it cannot ask retrospectively. It stays
+              OPTIONAL and `isProfileComplete` still turns on the first name alone — nothing
+              in the product gates on an ID, so blocking the app over one would be a lie
+              about what it is for. The hint says what it does and where it ends up; the
+              same field and the same words are on /profile. */}
+          <Input
+            label="ID or passport number (optional)"
+            inputMode="text"
+            autoComplete="off"
+            value={idNumber}
+            onChange={(event) => setIdNumber(event.target.value)}
+            hint="Printed on your invoices, which the warehouse needs for its records. You can add it later from your profile."
           />
 
           <Button type="submit" size="lg" fullWidth loading={saving} className="mt-2">

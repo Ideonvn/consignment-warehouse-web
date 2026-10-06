@@ -994,9 +994,70 @@ pages, so it is rendered exactly as given, never recomputed.
 the instructions, used on the statement, the bid refusal and the win modal. A payment without a
 reference is one the operator has to chase.
 
+**Since 2026-10-05 there are two references and they are not interchangeable.** Paying money
+*onto* an account — a deposit, a top-up — quotes the bidder's own `payment_reference`, because
+there is no document to name. Paying an *invoice* quotes **that invoice's number**, so one bank
+line maps to one document and the allocation is unambiguous; the PDF says the same words. So
+`PaymentDetails` is correct exactly where it is used and must **not** be added to the invoice
+screen: `InvoiceScreen` states the invoice number itself. The rule is the surface, not the
+person.
+
 **How to pay comes from config** (`lib/config/payments.ts`, `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS`).
 Payment is arranged manually with the operator today; there is no payment flow in the product. The
 fallback is an honest "contact the warehouse" line rather than invented bank details.
+
+## Invoices — a document, not a third number
+
+Added 2026-10-05. A section on `/account` below the statement, and
+`/account/invoices/[invoiceId]` behind it, both read-only.
+
+**Three things now, and the third is not a balance.** `held_minor` is what lets you bid,
+`balance_minor` is what you owe, and an invoice is a *document* covering a subset of the charges
+behind that balance. An unpaid invoice beside a settled balance is therefore not a contradiction:
+it means a payment landed on account and nobody applied it to that document. The order on the
+screen is deposit, balance, statement, invoices — which question gets answered first — and must
+not be shuffled. **The section fails quietly and disappears when there is nothing billed**, the
+same rule the deposit section follows: the statement is that screen's reason for existing.
+
+**`status` is read, never derived.** There is no status column on an invoice — the backend
+computes paid / part-paid / overdue / unpaid from the allocations and the clock on every read, in
+one precedence order (paid beats overdue beats part-paid). `lib/format/invoices.ts` puts words to
+it and nothing else. A screen that worked it out from `paid_minor` and `due_at` would eventually
+tell someone they are overdue on an invoice the business considers settled.
+
+**Amounts are positive here and negative on the statement, and both are right.** On the statement
+a charge reduces a balance; on a document it is an amount owed, and a minus sign there reads as a
+credit. `vat_number` and `tax_rate_bps` are snapshots taken at issue, never live settings, and the
+title follows the number rather than the rate: a registered vendor selling at a zero rate still
+issues a tax invoice.
+
+**More than one invoice for a sale is normal.** A document covers the charges that were unbilled
+when it was raised, so a reserve accepted days after the auction closes becomes a *second*
+invoice rather than an edit to the first. An issued invoice never changes, which is why nothing
+on either screen is editable.
+
+**The PDF cannot be a link, and that is the point.** The backend streams it through the API behind
+the bearer token rather than serving a presigned URL — a presigned link is a bearer capability
+that survives being forwarded, and an invoice names a person and what they owe. So
+`apiRequestBlob` in `lib/api/client.ts` fetches the bytes through the same single-flight refresh
+as every other call, and `saveBlobAs` hands them to the browser through an object URL. **The URL
+is revoked on a timer rather than synchronously**: Safari — which is most of this app's traffic —
+has not finished reading it when `click()` returns, and revoking straight away saves an empty
+file.
+
+`apiRequestBlob` is deliberately a small separate function rather than a flag on `apiRequest`.
+That one's whole contract is "parse the body against a schema", and a branch that skipped the
+parse would make its return type a lie on every other call.
+
+**The invoice asks for its own number as the payment reference**, not the bidder's standing
+`payment_reference`. `InvoiceScreen` prints it; `PaymentDetails` is deliberately absent from that
+screen. See "Bidder accounts" above for why both references exist.
+
+**One thing to know about the figures on screen:** `formatMoney` drops the cents on whole amounts
+app-wide ("R5 000", not "R5 000,00"), so an invoice line here reads slightly differently from the
+same line on the PDF, which always prints cents. Same number, different convention — and the
+convention is the app's, declared once in `lib/format/money.ts`. A second formatter just for
+invoices would be a worse trade than the inconsistency.
 
 ## Closing an account
 
@@ -1039,6 +1100,24 @@ address to satisfy a rule; they do it to stop missing things.
 **Changing an email clears its verification server-side**, so `save()` must feed the PATCH response
 into the session user. Keeping the old user object would leave a stale "verified" tick on an address
 that is nothing of the sort.
+
+**The ID is asked at sign-up as well as on the profile, and `isProfileComplete` is unchanged.**
+`/welcome` now carries all three — first name, last name, ID — because signing up is the one
+moment somebody is willing to type them and an invoice that prints them cannot ask
+retrospectively. **Only the first name is required**, exactly as before: `isProfileComplete`
+still turns on that one field, so no existing account is bounced back to `/welcome` and nobody
+is locked out of the app over a value that only decides whether a row appears on a document.
+The app has the same screen with the same words and the same rule (`lib/account.ts`'s
+`isProfileComplete` there mirrors `lib/auth/session.ts`'s here) — if one changes, both must.
+
+**The ID / passport field is optional, free text, and gates nothing.** It is on the same card,
+saved by the same `save()`, and it exists for one reason: the invoice design prints it. So the
+hint says what it is actually for and says plainly that it lands on a document — an invoice is
+immutable once issued and survives closing an account, which is a bigger claim than any other
+field on that screen. It is **not** `type="number"`: a passport number is a legitimate answer
+and a leading zero on an SA ID is significant. Never validate it as a 13-digit SA ID and never
+treat a blank as an error; the server reads an empty string as unset, and a blank simply omits
+the row from the document.
 
 **Verification is not a login.** It requires an existing session, issues no token, and changes
 nothing about the session. Phone remains the only authentication identity — do not let this flow
