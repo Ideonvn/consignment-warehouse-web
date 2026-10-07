@@ -20,6 +20,7 @@ import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { ThemeSetting } from "@/components/theme/ThemeSetting";
 import { EmailVerification } from "@/components/profile/EmailVerification";
 import { DeleteAccount } from "@/components/profile/DeleteAccount";
+import { BuildVersion } from "@/components/account/BuildVersion";
 import { InvoicesSection } from "@/components/invoices/InvoicesSection";
 import { cn } from "@/lib/utils/cn";
 
@@ -263,6 +264,9 @@ export function AccountScreen() {
       <div className="mt-8 border-t border-border pt-6">
         <DeleteAccount />
       </div>
+
+      {/* Last and quietest. Nobody looks for it until somebody asks which build they are on. */}
+      <BuildVersion />
     </PhoneColumn>
   );
 }

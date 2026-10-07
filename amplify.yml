@@ -36,6 +36,24 @@ frontend:
             fi
             echo "ok: $required is set"
           done
+        # Which commit is live. Amplify sets AWS_COMMIT_ID for every build; Next only
+        # inlines `NEXT_PUBLIC_*`, so it has to be carried across under that prefix to
+        # reach the bundle at all. `package.json` carries 0.1.0 and nothing bumps it, so
+        # the SHA is the only thing that actually identifies a deploy.
+        #
+        # **Written to `.env.production` rather than exported**, because `next build`
+        # runs in the *build* phase and a shell `export` here is not reliably in its
+        # environment — phases are not guaranteed to share one shell. Next loads
+        # `.env.production` during the build regardless, and a real environment variable
+        # still wins over the file, so setting it in the Amplify console later overrides
+        # this rather than fighting it.
+        #
+        # **Deliberately NOT in the required-variable loop above.** Those two are
+        # catastrophic when missing — a bundle pointed at localhost. This one missing
+        # costs a line of small print on the account screen, and failing a deploy over it
+        # would be the wrong trade. Absent, the line simply does not render.
+        - echo "NEXT_PUBLIC_BUILD_SHA=${AWS_COMMIT_ID:-}" >> .env.production
+        - echo "build sha: ${AWS_COMMIT_ID:-(unset)}"
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
