@@ -331,6 +331,28 @@ export const depositAccountSchema = z.object({
  * a screen that worked it out from `paid_minor` and `due_at` would eventually
  * disagree with the server about a document the bidder is looking at.
  */
+/**
+ * Where to pay money IN, and the reference to quote — `GET /me/payment-details`.
+ *
+ * **Every field is nullable and the server never sends an empty string.** The five
+ * `INVOICE_BANK_*` settings have no defaults, so "not configured" is a real state; a null row is
+ * omitted rather than rendered as a label with nothing after it. `reference` is nullable because
+ * `users.payment_reference` is — every account is assigned one at sign-up, so it should always be
+ * there, but the column permits otherwise and the type says so.
+ *
+ * **Never carry a copy of this in the client.** It is served precisely so one account number
+ * exists in the system; a copy in `NEXT_PUBLIC_*` is the one that goes stale, and the stale copy
+ * is what somebody transfers money into.
+ */
+export const paymentDetailsSchema = z.object({
+  reference: z.string().nullable(),
+  bank_name: z.string().nullable(),
+  account_name: z.string().nullable(),
+  account_number: z.string().nullable(),
+  branch_code: z.string().nullable(),
+  account_type: z.string().nullable(),
+});
+
 export const invoiceStatusSchema = z.enum(["unpaid", "part_paid", "paid", "overdue"]);
 
 /**

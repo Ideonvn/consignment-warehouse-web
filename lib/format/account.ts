@@ -1,27 +1,10 @@
-import type { DepositEntryType, LedgerEntryType } from "@/types/api";
+import type { DepositEntryType } from "@/types/api";
 
-/**
- * `entry_type` values are internal names. A statement is something a customer
- * reads, so every one of them gets a human label.
- */
-const ENTRY_LABELS: Record<LedgerEntryType, string> = {
-  // Retired in October 2026, when the deposit became its own book. Entries from
-  // before then are still on statements and still need a name.
-  deposit: "Deposit",
-  payment: "Payment",
-  lot_won: "Lot won",
-  commission: "Commission",
-  refund: "Refund",
-  adjustment: "Adjustment",
-  // A reversal corrects an earlier entry. It is shown as its own line, never
-  // netted against the original — a statement is a history, and an entry that
-  // silently vanishes is worse than one that is explained.
-  reversal: "Correction",
-};
-
-export function entryLabel(type: LedgerEntryType): string {
-  return ENTRY_LABELS[type] ?? "Adjustment";
-}
+// `ENTRY_LABELS` / `entryLabel` lived here and went with the statement on
+// 2026-10-07 — their one caller was the statement rows on the account screen,
+// and nothing names a `LedgerEntryType` to a bidder any more. The ledger itself
+// is untouched and `GET /me/account` still returns entries; bring the map back
+// from git if a surface ever needs to print one again.
 
 /**
  * The deposit book's own labels. Separate from the ledger's on purpose: the two

@@ -7,6 +7,7 @@ import type {
   bidSchema,
   bidStatusSchema,
   depositAccountSchema,
+  paymentDetailsSchema,
   depositEntrySchema,
   depositEntryTypeSchema,
   invoiceDetailSchema,
@@ -74,6 +75,7 @@ export type Account = z.infer<typeof accountSchema>;
 export type LedgerEntry = z.infer<typeof ledgerEntrySchema>;
 export type LedgerEntryType = z.infer<typeof ledgerEntryTypeSchema>;
 export type DepositAccount = z.infer<typeof depositAccountSchema>;
+export type PaymentDetails = z.infer<typeof paymentDetailsSchema>;
 export type DepositEntry = z.infer<typeof depositEntrySchema>;
 export type DepositEntryType = z.infer<typeof depositEntryTypeSchema>;
 

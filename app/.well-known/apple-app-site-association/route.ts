@@ -23,7 +23,7 @@ const APP_ID = "CFZK4RA928.com.irithmetic.consignmentwarehouse";
 
 /**
  * Only the two canonical shareable surfaces. `/`, `/login`, `/search` and
- * `/profile` are deliberately **not** claimed: a link to the front door or to a
+ * `/account` are deliberately **not** claimed: a link to the front door or to a
  * sign-in belongs in the browser.
  */
 const ASSOCIATION = {

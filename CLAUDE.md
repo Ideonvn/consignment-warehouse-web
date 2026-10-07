@@ -406,7 +406,7 @@ There were three ways to browse an auction — a card stack, a photo gallery and
 device and remembered in `localStorage`, with the stack as the default and the stated identity of
 the product. **All of that is gone.** The first live stakeholder session found the app too complex;
 the direction is now fewest buttons, fewest options, fewest taps to place a bid. The list is the
-only layout, there is no preference to set, and `/profile` no longer has a browsing section.
+only layout, there is no preference to set, and the Account tab has no browsing section.
 
 **Nothing is ever removed from the list because of something the user did.** Lots used to disappear
 as they were passed or saved, and the visible set was the server's unswiped list minus this
@@ -787,7 +787,7 @@ component in that group's layout, and `lib/auth/publicPaths.ts` is a list of *pa
 through. Neither file is a page and neither reaches that list, so **do not add them to it**.
 
 **Claimed: `/lots/*` and `/auctions/*`** — the canonical links people paste into a WhatsApp thread.
-**Deliberately not claimed: `/`, `/login`, `/search`, `/profile`.** A link to the front door or to a
+**Deliberately not claimed: `/`, `/login`, `/search`, `/account`.** A link to the front door or to a
 sign-in should stay in the browser; opening the app for a whole-site link is how people end up
 unable to read a page they were sent.
 
@@ -803,7 +803,7 @@ see NOTES.md for where each comes from and how to verify after a deploy.
 
 ## Theming
 
-Light / Dark / System, selectable on `/profile`. **Dark is the default and the product's
+Light / Dark / System, selectable on `/account`. **Dark is the default and the product's
 identity**; light exists for daylight readability and is opt-in.
 
 **The palette is declared twice on purpose.** Raw tokens (`--bg`, `--accent`, ...) live on `:root`,
@@ -979,20 +979,35 @@ something. `lib/format/account.ts` turns the signed number into plain language (
 "R2 000 on account") because "−200000" is not usable. It also maps `entry_type` to human labels —
 `lot_won` is "Lot won", `commission` is "Commission", `reversal` is "Correction".
 
-**The account screen shows the deposit first and the statement second**, and `AccountSummaryLink`
-shows both lines with the deposit leading. "Why can't I bid" is the commoner question and the balance
-is never its answer. The deposit list is its own query, and it fails **quietly** — the statement is
-the screen's reason for existing and must not be taken down by a deposit call that errors.
+**One Account tab, and it leads with the balance** (2026-10-07). There was a `/profile` tab with
+`/account` pushed behind it and an `AccountSummaryLink` between them; the mobile app has always had
+a single tab, and **the two products are meant to behave the same**, so `/profile`, `ProfileScreen`
+and `AccountSummaryLink` are gone and `/account` is the tab. Order is **balance, deposit, invoices**,
+then the profile form, theme, sign out and delete.
 
-**A `reversal` is shown as its own line and never netted against the entry it corrects.** The
-statement is a history; an entry that silently vanishes is worse than one that is explained. The
-same goes for `balance_after_minor` — the server accumulates it oldest-first and continues it across
-pages, so it is rendered exactly as given, never recomputed.
+**That order reverses this file's own rule, deliberately.** The deposit led because "why can't I
+bid" is the commoner question and the balance is never its answer — still true about questions, and
+outweighed by what the screen is for now that invoices exist: what somebody opens it to see is what
+they owe, and it was buried under a figure that is usually unchanged for months. The deposit keeps
+its place ahead of invoices. Its query still fails **quietly**, for the same reason as before,
+except that it is the **balance** that is now the screen's reason for existing.
 
-**The payment reference travels with every request for money.** `GET /auth/me` carries
-`payment_reference`; `components/account/PaymentDetails.tsx` is the single block that pairs it with
-the instructions, used on the statement, the bid refusal and the win modal. A payment without a
-reference is one the operator has to chase.
+**The statement is gone outright, not hidden.** A paged ledger of every charge and payment was the
+bulk of `/account`. An invoice is the document a bidder is billed against, and two renderings of the
+same money — one of which nobody is billed against — is a question ("why does this say something
+different?") with no good answer. `GET /me/account` is still called for `balance_minor` and now asks
+for one entry. `entryLabel` went with it; `depositEntryLabel` stays, and `balance_after_minor` is
+still rendered exactly as the server gives it wherever it appears.
+
+**The money tiles are summaries that open something.** `/account/deposit` holds the held figure, the
+paged movements and a "Pay your deposit" sheet; `/account/invoices` holds the full list. The account
+tab shows a figure and a chevron for each.
+
+**The payment reference travels with every request for money**, and since 2026-10-07 so do the
+bank details. `components/account/PaymentDetails.tsx` is the single block, used on the deposit
+sheet, the bid refusal, the auction info sheet, the win modal and the invoice screen. A payment
+without a reference is one the operator has to chase; one without an account number is one nobody
+can make.
 
 **Since 2026-10-05 there are two references and they are not interchangeable.** Paying money
 *onto* an account — a deposit, a top-up — quotes the bidder's own `payment_reference`, because
@@ -1002,14 +1017,34 @@ line maps to one document and the allocation is unambiguous; the PDF says the sa
 screen: `InvoiceScreen` states the invoice number itself. The rule is the surface, not the
 person.
 
-**How to pay comes from config** (`lib/config/payments.ts`, `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS`).
-Payment is arranged manually with the operator today; there is no payment flow in the product. The
-fallback is an honest "contact the warehouse" line rather than invented bank details.
+**The instructions come from config; the BANK DETAILS come from the API.**
+`lib/config/payments.ts` / `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS` is still the generic line, and it must
+stay generic — `GET /me/payment-details` serves the five bank fields plus the caller's reference,
+from the same settings the invoice PDF prints, so one account number exists in the system.
+**Never add bank fields to `NEXT_PUBLIC_*`**: a copy in the client is the one that goes stale, and
+the stale copy is what somebody *transfers money into*. A `null` field is omitted from the block
+rather than labelled blank, and the query fails quietly — this renders inside sheets opened for
+another reason, and an error about a banking lookup on top of "you can't bid yet" helps nobody.
+Payment is still arranged manually; there is no payment flow in the product.
 
 ## Invoices — a document, not a third number
 
-Added 2026-10-05. A section on `/account` below the statement, and
-`/account/invoices/[invoiceId]` behind it, both read-only.
+Added 2026-10-05. A section on `/account` — **three rows and a "Show all"** since 2026-10-07 —
+with `/account/invoices` (the full list, filtered) and `/account/invoices/[invoiceId]` behind it,
+all read-only. `InvoiceRow` is shared by the section and the list so a row cannot come to mean two
+things, and the mobile app renders the identical shape.
+
+**A row's status is a coloured left edge plus words in the amount column**, never colour alone — the
+same rule the countdown and the bid states follow. It was a `StatusPill` on its own line, which
+spent a third of the row to say one word. Only `settled` and `overdue` colour the edge; unpaid and
+part-paid are the ordinary state of a document issued yesterday.
+
+**Filtering is client-side over the pages already loaded**, because the endpoint offers no status
+filter and `status` is derived per read. Chips are All / Unpaid / Overdue / Paid, and **Unpaid
+includes overdue** — overdue is the narrower chip, a subset rather than a sibling, because the
+exclusive reading hides the documents somebody most needs from the filter they reach for first, and
+hides them silently. A filtered view can be empty while earlier pages hold matches, which is why
+"Show earlier invoices" stays visible under an empty state.
 
 **Three things now, and the third is not a balance.** `held_minor` is what lets you bid,
 `balance_minor` is what you owe, and an invoice is a *document* covering a subset of the charges
@@ -1050,8 +1085,11 @@ That one's whole contract is "parse the body against a schema", and a branch tha
 parse would make its return type a lie on every other call.
 
 **The invoice asks for its own number as the payment reference**, not the bidder's standing
-`payment_reference`. `InvoiceScreen` prints it; `PaymentDetails` is deliberately absent from that
-screen. See "Bidder accounts" above for why both references exist.
+`payment_reference`. `PaymentDetails` was banned from this screen for exactly that reason and is
+now **on** it (2026-10-07) — because the ban's reasoning is satisfied rather than broken: the
+component takes `invoiceNumber` and prints that instead of the account reference. What it adds is
+the bank block, which this screen never had, so somebody holding an invoice had the number to quote
+and nowhere to send the money. See "Bidder accounts" above for why both references exist.
 
 **One thing to know about the figures on screen:** `formatMoney` drops the cents on whole amounts
 app-wide ("R5 000", not "R5 000,00"), so an invoice line here reads slightly differently from the
@@ -1061,7 +1099,8 @@ invoices would be a worse trade than the inconsistency.
 
 ## Closing an account
 
-`DELETE /auth/me` from Profile, in `components/profile/DeleteAccount.tsx`. Last on the screen,
+`DELETE /auth/me` from the Account tab, in `components/profile/DeleteAccount.tsx`. Last on the
+screen,
 after signing out, because it is the only irreversible action there — and required to be reachable
 in-app by both app stores.
 
@@ -1083,8 +1122,10 @@ query cache, end the session, replace to `/login`. In that order.
 
 ## Email verification and marketing consent
 
-Both live on `/profile` and both read from the session user, which is replaced by whatever the
-mutation returned — that is what makes the states flip without a refetch.
+Both live on `/account` and both read from the session user, which is replaced by whatever the
+mutation returned. **`MarketingPreferences` is kept but no longer rendered** (2026-10-07) —
+restoring it is one line, consent is still editable through the API, and a channel with no recorded
+opt-in was already treated as a refusal, so hiding the card changes nothing about what is sent — that is what makes the states flip without a refetch.
 
 **An address has three states, not two, and the third is the one that hurts.** Unverified is
 ordinary. Verified is quiet. **Bounced** (`email_bounced_at` set) means the address passed

@@ -3,7 +3,7 @@ import { AccountScreen } from "@/components/account/AccountScreen";
 
 export const metadata: Metadata = {
   title: "Account",
-  description: "Your balance, deposits, payments and lots won.",
+  description: "Your balance, your deposit, your invoices and your details.",
 };
 
 export default function AccountPage() {

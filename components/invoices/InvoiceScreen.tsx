@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Money } from "@/components/ui/Money";
+import { PaymentDetails } from "@/components/account/PaymentDetails";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { PhoneColumn } from "@/components/layout/PhoneColumn";
@@ -157,15 +158,18 @@ export function InvoiceScreen({ invoiceId }: { invoiceId: string }) {
       {/* The reference for an INVOICE is its own number, not the per-person
           `payment_reference` the deposit and top-up screens quote. One bank
           line against one document is what makes the allocation unambiguous,
-          and the PDF says the same words. */}
-      <p className="mt-4 text-xs text-text-muted">
-        Use{" "}
-        <span className="tabular font-semibold text-text select-all">
-          {invoice.number}
-        </span>{" "}
-        as your payment reference. An invoice never changes once it has been
-        issued — if something here looks wrong, get in touch and a correction is
-        made on your statement rather than on this document.
+          and the PDF says the same words.
+
+          **`PaymentDetails` was banned from this screen and is now here on
+          purpose** (2026-10-07). The ban's reason was that this screen must not
+          quote the account reference — and it still does not: the component
+          takes `invoiceNumber` and prints that instead. What it adds is the
+          bank block, which this screen never had, so somebody holding an
+          invoice had the number to quote and nowhere to send the money. */}
+      <PaymentDetails className="mt-4" invoiceNumber={invoice.number} />
+      <p className="mt-3 text-xs text-text-muted">
+        An invoice never changes once it has been issued — if something here looks wrong, get in
+        touch and a correction is made on your statement rather than on this document.
       </p>
     </PhoneColumn>
   );

@@ -36,8 +36,11 @@ const TABS: Tab[] = [
     ),
   },
   {
-    href: "/profile",
-    label: "Profile",
+    // One tab for the money AND the profile, matching the mobile app. It was
+    // "Profile" with /account pushed behind it; `isActive` matches sub-paths by
+    // prefix, so /account/deposit and /account/invoices keep it lit.
+    href: "/account",
+    label: "Account",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
         <circle cx="12" cy="8.5" r="3.5" />

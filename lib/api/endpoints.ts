@@ -18,6 +18,7 @@ import {
   lotDetailSchema,
   lotSearchResultListSchema,
   myBidListSchema,
+  paymentDetailsSchema,
   tokenPairSchema,
   userSchema,
   wsTicketSchema,
@@ -36,6 +37,7 @@ import type {
   LotSearchResult,
   MyBid,
   NotificationChannel,
+  PaymentDetails,
   TokenPair,
   User,
   WsTicket,
@@ -272,6 +274,17 @@ export async function deleteMe(): Promise<void> {
  * reserve accepted days after the auction closes becomes a second document
  * rather than an edit to the first — an issued invoice never changes.
  */
+/**
+ * Where to pay money in, and the reference to quote.
+ *
+ * **Asked for rather than configured here.** The bank block is the same settings the invoice PDF
+ * prints, so there is one account number in the system; `NEXT_PUBLIC_PAYMENT_INSTRUCTIONS` stays
+ * what it always was — a generic line — and must never grow bank fields beside it.
+ */
+export function getPaymentDetails(): Promise<PaymentDetails> {
+  return apiGet("/me/payment-details", { schema: paymentDetailsSchema });
+}
+
 export function getMyInvoices(
   params: { limit?: number; offset?: number } = {},
 ): Promise<ApiResult<Invoice[]>> {
