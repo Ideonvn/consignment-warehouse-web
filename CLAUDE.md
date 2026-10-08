@@ -1180,10 +1180,15 @@ and it renders as "Not set", never as a refusal.
 omitted channels untouched, so restating all three would stamp a fresh consent timestamp on choices
 they never made — and consent is an auditable act.
 
-**`OTP_CODE_LENGTH` (`lib/auth/otpCode.ts`) is shared by the login and email code inputs.** The
-backend issues six digits for both; the value is overridable only because a local backend with
-`OTP_DEV_CODE` set returns a shorter fixed code, and a six-box input cannot be completed with four
-digits. Production runs on the default.
+**`OTP_CODE_LENGTH` (`lib/auth/otpCode.ts`) is shared by the login and email code inputs, and it
+is a constant rather than a setting.** It used to read `NEXT_PUBLIC_OTP_CODE_LENGTH`, set to `4`
+in `.env.local` so a local backend's four-digit `OTP_DEV_CODE` could be typed in — which made one
+fact true in four places and false in at least one: a six-digit code minted for an admin demo
+sign-in could not be entered on a local build at all. The backend now owns the definition
+(`OTP_CODE_LENGTH` in `app/core/config.py`) and refuses a dev code of any other length, so the
+local dev code is `000000` and no environment wants a different box count. The env var is gone
+from `.env.example`, the README and the Amplify module's rejection list; changing the length means
+changing both ends in one release.
 
 ## Structure
 
@@ -1237,7 +1242,7 @@ network failure rather than a CORS error — so it reads as "the API is down" wh
 same API keeps working. `npm run dev` therefore pins `-p 3400` rather than leaving it to Next's
 default.
 
-While the backend runs with `APP_ENV=local` the **OTP code is always `0000`**. Seeded bidders:
+While the backend runs with `APP_ENV=local` the **OTP code is always `000000`**. Seeded bidders:
 `+27820000002`, `+27820000003`, `+27820000004`; admin `+27820000001`. Numbers must be full E.164 —
 the backend does not infer a country from `082…`.
 

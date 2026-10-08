@@ -50,15 +50,6 @@ variable "environment_variables" {
   EOT
   type        = map(string)
   default     = {}
-
-  validation {
-    # This one is a trap rather than a preference. The variable exists only because a
-    # local backend issues a four-digit dev code; production issues six, and the default
-    # is six. Setting it here would render four boxes for a six-digit code and nobody
-    # could sign in — a total outage that looks like a backend fault.
-    condition     = !contains(keys(var.environment_variables), "NEXT_PUBLIC_OTP_CODE_LENGTH")
-    error_message = "Do not set NEXT_PUBLIC_OTP_CODE_LENGTH in a deployed environment: production codes are six digits and the app already defaults to six. A value of 4 locks every user out of sign-in."
-  }
 }
 
 variable "branch_environment_variables" {

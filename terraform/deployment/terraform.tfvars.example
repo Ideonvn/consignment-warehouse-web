@@ -44,7 +44,3 @@ payment_instructions = "REPLACE ME — bank, account number, branch code, and a 
 # Previews inherit the production API, so a branch build would place real bids.
 enable_auto_branch_creation = false
 enable_webhook              = false
-
-# NOTE: there is deliberately no NEXT_PUBLIC_OTP_CODE_LENGTH setting, and the module
-# refuses one. Production OTPs are six digits and the app already defaults to six; a 4
-# here renders four boxes for a six-digit code and nobody can sign in.

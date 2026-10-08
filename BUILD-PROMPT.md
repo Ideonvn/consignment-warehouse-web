@@ -114,7 +114,7 @@ Create `.env.local` with both, and `.env.example` documenting them.
 ### Authentication
 
 The backend is phone-first with OTP. **While the backend runs with `APP_ENV=local`, the OTP code is
-always `0000`** — you do not need to read it from logs.
+always `000000`** — you do not need to read it from logs.
 
 Seeded test accounts (created by `make seed` in the backend): bidders `+27820000002`,
 `+27820000003`, `+27820000004`; admin `+27820000001`. Use a bidder.
@@ -530,7 +530,7 @@ driven by `Retry-After`. Route users with no `first_name` to `/welcome`.
 An auth guard component that redirects unauthenticated users to `/login`, preserving their intended
 destination.
 
-**Gate:** as above, plus manually confirm a full login against the running backend with `0000`.
+**Gate:** as above, plus manually confirm a full login against the running backend with `000000`.
 
 ### M2 — App shell
 
@@ -640,7 +640,7 @@ above should pass, but confirm rather than assume.
 ### M10 — Final verification
 
 Run the full gate, then walk the entire journey against the running backend and record the result in
-`NOTES.md`: log in with `0000` → browse auctions → enter a stack → swipe left → swipe right →
+`NOTES.md`: log in with `000000` → browse auctions → enter a stack → swipe left → swipe right →
 confirm a bid → see it in My Bids → open lot detail → raise the maximum → in a second window bid
 higher as another seeded bidder → confirm the first window updates live and shows outbid → let a
 lot close → confirm it renders as ended.

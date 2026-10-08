@@ -138,12 +138,19 @@ Wired into `/profile` against the new `GET /auth/me` fields, `POST /auth/email/v
 
 **Found while building: the login code input was four boxes against a six-digit backend.**
 `generate_otp_code()` returns six digits unless `APP_ENV=local` *and* `OTP_DEV_CODE` is set — which
-is exactly why nobody noticed locally, where it returns `0000`. The login form hardcoded
-`CODE_LENGTH = 4`, so in production the box count would never have matched the code. Both inputs now
-read `OTP_CODE_LENGTH` from `lib/auth/otpCode.ts`, defaulting to 6, with
-`NEXT_PUBLIC_OTP_CODE_LENGTH=4` in `.env.local` for the seeded local backend. **This is a real
-production fix that happened to fall out of an unrelated feature** — worth knowing that the local
-dev code was hiding it.
+is exactly why nobody noticed locally, where it returned `0000`. The login form hardcoded
+`CODE_LENGTH = 4`, so in production the box count would never have matched the code. **This is a
+real production fix that happened to fall out of an unrelated feature** — worth knowing that the
+local dev code was hiding it.
+
+**The first fix made it a setting, and that was wrong too.** Both inputs read `OTP_CODE_LENGTH`
+from `lib/auth/otpCode.ts`, overridable with `NEXT_PUBLIC_OTP_CODE_LENGTH=4` for the seeded local
+backend — so one fact was now true in four places, and a six-digit code minted for an admin demo
+sign-in could not be typed on a local build at all. The length is a property of the protocol both
+ends implement, so it is a constant now: `OTP_CODE_LENGTH` in the backend's `app/core/config.py`,
+which also refuses an `OTP_DEV_CODE` of any other length, and a literal `6` here. The local dev
+code is `000000`, and the env var, its README row and the Amplify module's rejection of it are all
+gone.
 
 **Verified against the running backend** (bidder `+27820000002`, seeded local API):
 

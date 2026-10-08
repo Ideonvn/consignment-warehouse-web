@@ -36,7 +36,7 @@ instantly. Never wait an hour.
 ### The seeded dataset
 
 `SEED.md` in the backend repo lists every account and auction, and points at the interesting lots.
-Keep it open. The OTP is **`0000`** for everyone. Numbers are full E.164 — `+27820000002`, not
+Keep it open. The OTP is **`000000`** for everyone. Numbers are full E.164 — `+27820000002`, not
 `082...`.
 
 For anything involving two bidders, use a **private window** for the second, or the sessions will
@@ -229,7 +229,7 @@ Re-seed first so the time-sensitive auctions are fresh.
 
 ## A. Getting in
 
-**A1 — Sign in** as `+27820000002`, code `0000`.
+**A1 — Sign in** as `+27820000002`, code `000000`.
 *Expect:* straight in, four live/ended auctions listed. **`winter-estate-draft` must not appear.**
 
 **A2 — Enter `0820000002`** (local format).

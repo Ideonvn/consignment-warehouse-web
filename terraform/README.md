@@ -243,11 +243,14 @@ The https/wss validations exist because the failure is silent: a `ws://` socket 
 `https://` page is blocked as mixed content, and the live bid layer simply never connects while the
 rest of the app looks fine.
 
-**`NEXT_PUBLIC_OTP_CODE_LENGTH` must never be set here, and the module rejects it.** It exists only
-because a local backend with `OTP_DEV_CODE` returns a four-digit code; production issues six digits
-and the app defaults to six. A `4` in production renders four boxes for a six-digit code — nobody can
-complete the field, nobody can sign in, and the outage reads like a backend fault. The variable was
-introduced to fix a latent version of exactly this bug, where the login form hardcoded four boxes.
+**`NEXT_PUBLIC_OTP_CODE_LENGTH` no longer exists, and the validation that used to reject it is
+gone with it.** The OTP code length is now a constant at both ends — `OTP_CODE_LENGTH` in the
+backend's `app/core/config.py`, which also refuses a dev code of any other length, and a literal
+`6` in `lib/auth/otpCode.ts`. The variable was introduced to fix a latent bug where the login form
+hardcoded four boxes against a six-digit production code, and it then became the same class of bug
+one layer up: a six-digit code minted for an admin demo sign-in could not be typed on a local build
+whose `.env.local` said `4`. A guard against setting a variable nothing reads would only imply it
+still mattered.
 
 ## Rendering
 

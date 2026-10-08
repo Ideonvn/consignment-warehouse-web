@@ -21,10 +21,8 @@ module "web" {
    * secret here under any name. This app holds none: the access token is memory-only and
    * the refresh token is a cookie the API sets, so there is nothing for the build to know.
    *
-   * NEXT_PUBLIC_OTP_CODE_LENGTH is deliberately absent, and the module rejects it. It
-   * exists for a local backend whose dev code is four digits; production issues six and
-   * the app defaults to six. Setting it to 4 here would draw four boxes for a six-digit
-   * code and lock every user out of sign-in.
+   * There is no NEXT_PUBLIC_OTP_CODE_LENGTH any more: the OTP code length is a constant
+   * at both ends. See terraform/README.md.
    */
   environment_variables = merge(
     {
